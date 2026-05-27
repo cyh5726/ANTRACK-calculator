@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANTRACK 收益计算器</title>
+    <style>
+        :root {
+            --primary-color: #0ea5e9;
+            --primary-dark: #0369a1;
+            --primary-light: #38bdf8;
+            --accent-color: #22d3ee;
+            --bg-gradient-start: #0f172a;
+            --bg-gradient-end: #1e3a5f;
+            --card-bg: rgba(30, 41, 59, 0.95);
+            --card-bg-light: rgba(51, 65, 85, 0.8);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            min-height: 100vh;
+            padding: 24px;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container { max-width: 900px; margin: 0 auto; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+            color: #fff;
+            padding: 32px 40px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(14, 165, 233, 0.3);
+        }
+
+        .header-content { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px; }
+        .header h1 { font-size: 28px; font-weight: 600; letter-spacing: 1px; }
+        .header h1 span { font-size: 14px; opacity: 0.8; font-weight: 400; display: block; margin-top: 4px; }
+
+        .btc-info { display: flex; flex-direction: column; gap: 12px; min-width: 200px; }
+        .btc-row { display: flex; align-items: center; gap: 10px; }
+        .btc-label { font-size: 12px; opacity: 0.7; min-width: 60px; }
+        .btc-value { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+        .btc-input { width: 100px; padding: 4px 8px; font-size: 14px; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; background: rgba(255,255,255,0.1); color: #fff; text-align: right; }
+        .btc-input:focus { outline: none; border-color: #fff; }
+        .btc-refresh { padding: 4px 10px; font-size: 12px; background: rgba(255,255,255,0.2); border: none; border-radius: 4px; color: #fff; cursor: pointer; }
+        .btc-refresh:hover { background: rgba(255,255,255,0.3); }
+        .btc-loading { font-size: 11px; color: rgba(255,255,255,0.6); animation: pulse 1.5s infinite; }
+        .btc-error { font-size: 11px; color: #fca5a5; }
+
+        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--card-bg);
+            border-radius: var(--radius-md);
+            padding: 20px 28px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .control-group { display: flex; gap: 24px; align-items: center; }
+        .control-item { display: flex; align-items: center; gap: 10px; }
+        .control-item label { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+
+        .control-item select {
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            background: var(--card-bg-light);
+            color: var(--text-primary);
+            cursor: pointer;
+            min-width: 140px;
+            transition: all 0.2s;
+        }
+
+        .control-item select:hover { border-color: var(--primary-color); }
+        .control-item select:focus { outline: none; border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2); }
+
+        /* Step Indicator */
+        .step-indicator { display: flex; justify-content: center; gap: 16px; margin-bottom: 28px; }
+        .step-dot {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--card-bg-light);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .step-dot::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 2px;
+            background: var(--border-color);
+            right: -20px;
+        }
+
+        .step-dot:last-child::after { display: none; }
+        .step-dot.active {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border-color: var(--primary-light);
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+        }
+        .step-dot.completed { background: var(--success-color); border-color: var(--success-color); }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 36px 40px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .card-title::before {
+            content: '';
+            width: 6px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--primary-color), var(--accent-color));
+            border-radius: 3px;
+        }
+
+        /* Form Elements */
+        .form-group { margin-bottom: 24px; }
+        .form-label { display: block; font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-bottom: 10px; }
+        .form-label .required { color: var(--danger-color); }
+        .form-label .tip { font-weight: 400; font-size: 12px; opacity: 0.7; margin-left: 8px; }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 14px 18px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 16px;
+            background: var(--card-bg-light);
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2); }
+        .form-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+        .form-input.error { border-color: var(--danger-color); }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            cursor: pointer;
+        }
+
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+
+        /* Collapse Panel */
+        .collapse-panel { background: var(--card-bg-light); border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 20px; overflow: hidden; }
+        .collapse-header { padding: 18px 24px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 500; font-size: 15px; transition: all 0.2s; }
+        .collapse-header:hover { background: rgba(14, 165, 233, 0.1); }
+        .collapse-header::after { content: '▼'; font-size: 10px; color: var(--text-secondary); transition: transform 0.3s; }
+        .collapse-header.active::after { transform: rotate(180deg); }
+        .collapse-content { padding: 0 24px; max-height: 0; overflow: hidden; transition: all 0.3s ease; }
+        .collapse-content.show { padding: 20px 24px 24px; max-height: 600px; }
+
+        /* Buttons */
+        .btn-group { display: flex; gap: 16px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+        .btn { padding: 16px 36px; border: none; border-radius: var(--radius-sm); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; min-width: 160px; }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(14, 165, 233, 0.4); }
+        .btn-secondary { background: var(--card-bg-light); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { border-color: var(--primary-color); color: var(--text-primary); }
+
+        /* Result Table */
+        .result-table { background: var(--card-bg-light); border-radius: var(--radius-md); overflow: hidden; margin: 20px 0; border: 1px solid var(--border-color); }
+        .result-table table { width: 100%; border-collapse: collapse; }
+        .result-table th, .result-table td { padding: 16px 20px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .result-table th { background: linear-gradient(135deg, var(--primary-dark), var(--primary-color)); color: #fff; font-weight: 600; font-size: 14px; }
+        .result-table tr:last-child td { border-bottom: none; }
+        .result-table tr:hover td { background: rgba(14, 165, 233, 0.1); }
+
+        /* Metric Cards */
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .metric-card {
+            background: linear-gradient(135deg, var(--card-bg-light), var(--card-bg));
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .metric-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); border-color: var(--primary-color); }
+        .metric-card.highlight { background: linear-gradient(135deg, var(--primary-dark), var(--primary-color)); border-color: var(--primary-light); }
+        .metric-card .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500; }
+        .metric-card.highlight .label { color: rgba(255, 255, 255, 0.8); }
+        .metric-card .value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+        .metric-card.highlight .value { color: #fff; }
+
+        /* Comparison Section */
+        .comparison-toggle { background: var(--card-bg-light); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px 24px; margin-bottom: 24px; }
+        .comparison-toggle-label { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 16px; }
+        .toggle-switch { display: flex; gap: 12px; }
+        .toggle-option { padding: 12px 28px; border: 2px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; background: transparent; color: var(--text-secondary); }
+        .toggle-option:hover { border-color: var(--primary-light); }
+        .toggle-option.active { border-color: var(--primary-color); background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: #fff; }
+
+        /* Elegant Comparison Table */
+        .comparison-container { display: flex; flex-direction: column; gap: 12px; }
+        .comparison-card {
+            background: var(--card-bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 20px 24px;
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr 1.5fr;
+            align-items: center;
+            gap: 16px;
+            transition: all 0.3s;
+        }
+
+        .comparison-card:hover { border-color: var(--primary-light); transform: translateX(4px); }
+        .comparison-card.best-option { 
+            border-color: var(--success-color); 
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+        }
+
+        .comparison-card .method-name { font-weight: 600; font-size: 15px; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
+        .comparison-card .method-name .badge { 
+            font-size: 10px; padding: 3px 8px; border-radius: 10px; background: var(--success-color); color: #fff; font-weight: 700; 
+        }
+        .comparison-card .method-cost { font-size: 14px; color: var(--text-secondary); }
+        .comparison-card .method-cost span { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+
+        .comparison-card .savings-bar {
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .comparison-card .savings-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .comparison-card .savings-bar-fill.positive { background: linear-gradient(90deg, var(--success-color), #34d399); }
+        .comparison-card .savings-bar-fill.negative { background: linear-gradient(90deg, var(--danger-color), #f87171); }
+
+        .comparison-card .savings-text { font-size: 13px; margin-top: 6px; font-weight: 600; }
+        .comparison-card .savings-text.positive { color: var(--success-color); }
+        .comparison-card .savings-text.negative { color: var(--danger-color); }
+
+        .comparison-header {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr 1.5fr;
+            gap: 16px;
+            padding: 12px 24px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Conclusion Box */
+        .conclusion-box {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(34, 211, 238, 0.1));
+            border: 1px solid var(--primary-color);
+            border-radius: var(--radius-md);
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+
+        .conclusion-box .title { font-size: 18px; font-weight: 600; color: var(--primary-light); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+        .conclusion-box .content { font-size: 16px; line-height: 1.8; color: var(--text-primary); }
+        .conclusion-box .content strong { color: var(--accent-color); }
+        .conclusion-box .highlight { color: var(--success-color); font-weight: 700; }
+
+        /* Definition Box */
+        .definition-box {
+            background: var(--card-bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+
+        .definition-box .term { color: var(--primary-light); font-weight: 600; }
+        .definition-item { margin: 8px 0; font-size: 12px; }
+        .definition-item .term { font-weight: 600; color: var(--primary-light); }
+        .definition-box .formula { color: var(--text-secondary); font-style: italic; margin-top: 6px; }
+        
+        /* Definition Grid - Two Column Layout */
+        .definition-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .definition-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .definition-item .term {
+            display: block;
+            font-weight: 600;
+            color: var(--primary-light);
+            margin-bottom: 4px;
+        }
+        .definition-item .desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* Error Message */
+        .error-message { color: var(--danger-color); font-size: 12px; margin-top: 6px; font-weight: 500; }
+
+        /* Footer */
+        .footer { text-align: center; margin-top: 36px; padding: 24px; color: var(--text-secondary); font-size: 13px; border-top: 1px solid var(--border-color); }
+        .hidden { display: none !important; }
+
+        /* Custom Input Group */
+        .custom-input-group { display: none; margin-top: 12px; padding: 16px; background: var(--card-bg-light); border-radius: var(--radius-sm); }
+        .custom-input-group.show { display: block; }
+        .custom-input-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header { padding: 24px; }
+            .header-content { flex-direction: column; }
+            .btc-info { width: 100%; }
+            .control-panel { flex-direction: column; }
+            .control-group { flex-direction: column; width: 100%; }
+            .control-item { width: 100%; }
+            .step-indicator { gap: 8px; }
+            .step-dot { width: 40px; height: 40px; font-size: 14px; }
+            .step-dot::after { width: 16px; right: -14px; }
+            .card { padding: 24px; }
+            .metric-grid { grid-template-columns: 1fr 1fr; }
+            .btn { width: 100%; }
+            .comparison-header, .comparison-card { grid-template-columns: 1fr; gap: 8px; text-align: center; }
+            .comparison-card .savings-bar { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="mainContainer">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <h1 data-i18n="ANTRACK 收益计算器">ANTRACK 收益计算器 <span data-i18n="投资回报分析">投资回报分析</span></h1>
+                </div>
+                <div class="btc-info">
+                    <div class="btc-row">
+                        <span class="btc-label" data-i18n="BTC价格">BTC价格</span>
+                        <span class="btc-value">
+                            <span class="btc-currency" id="btcCurrencySymbol">$</span>
+                            <input type="number" class="btc-input" id="btcPriceInput" value="80000" onchange="updateBTCFromInput()">
+                            <button class="btc-refresh" onclick="refreshBTCData()">↻</button>
+                        </span>
+                    </div>
+                    <div class="btc-row">
+                        <span class="btc-label" data-i18n="全网算力">全网算力</span>
+                        <span class="btc-value">
+                            <input type="number" class="btc-input" id="networkHashrateInput" value="1000" onchange="updateHashrateFromInput()">
+                            <span style="font-size:12px;margin-left:4px;">EH/s</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div class="control-group">
+                <div class="control-item">
+                    <label data-i18n="语言">语言</label>
+                    <select id="languageSelect" onchange="switchLanguage()">
+                        <option value="zh" data-i18n="中文">中文</option>
+                        <option value="en">English</option>
+                        <option value="de">Deutsch</option>
+                    </select>
+                </div>
+                <div class="control-item">
+                    <label data-i18n="货币">货币</label>
+                    <select id="currencySelect" onchange="switchCurrency()">
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                        <option value="CAD">CAD (C$)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step-dot active" id="stepDot1">1</div>
+            <div class="step-dot" id="stepDot2">2</div>
+            <div class="step-dot" id="stepDot3">3</div>
+            <div class="step-dot" id="stepDot4">4</div>
+        </div>
+
+        <!-- Step 1: Input -->
+        <div class="card" id="step1">
+            <div class="card-title" data-i18n="步骤 1: 输入必要信息">步骤 1: 输入必要信息</div>
+
+            <div class="form-group">
+                <label class="form-label" data-i18n="供热需求 (kW)">供热需求 (kW) <span class="required">*</span></label>
+                <input type="number" class="form-input" id="heatingDemand" placeholder="例如: 24" data-i18n-placeholder="例如: 24" value="24" min="1">
+                <div class="error-message" id="heatingDemandError"></div>
+            </div>
+
+            <!-- Collapse Panel: 供暖设备 -->
+            <div class="collapse-panel">
+                <div class="collapse-header" onclick="toggleCollapse('equipmentCollapse')">
+                    <span data-i18n="供暖设备情况">供暖设备情况</span>
+                </div>
+                <div class="collapse-content show" id="equipmentCollapse">
+                    <div class="form-group">
+                        <label class="form-label" data-i18n="您当前有供暖设备吗？">您当前有供暖设备吗？</label>
+                        <select class="form-select" id="hasEquipmentSelect" onchange="handleEquipmentChange()">
+                            <option value="no" data-i18n="没有（新装）">没有（新装）</option>
+                            <option value="yes" data-i18n="有">有</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="equipmentTypeGroup" style="display: none;">
+                        <label class="form-label" data-i18n="请选择现有供暖设备类型">请选择现有供暖设备类型</label>
+                        <select class="form-select" id="equipmentTypeSelect" onchange="updateEquipmentType()">
+                            <option value="gas" data-i18n="燃气锅炉">燃气锅炉</option>
+                            <option value="heatpump" data-i18n="热泵">热泵</option>
+                            <option value="electric" data-i18n="电锅炉">电锅炉</option>
+                            <option value="biomass" data-i18n="生物质锅炉">生物质锅炉</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collapse Panel: 地区与能源价格 -->
+            <div class="collapse-panel">
+                <div class="collapse-header" onclick="toggleCollapse('regionCollapse')">
+                    <span data-i18n="地区与能源价格">地区与能源价格</span>
+                </div>
+                <div class="collapse-content show" id="regionCollapse">
+                    <div class="form-group">
+                        <label class="form-label" data-i18n="客户地区">客户地区</label>
+                        <select class="form-select" id="regionSelect" onchange="handleRegionChange()">
+                            <option value="europe" data-i18n="欧洲">欧洲</option>
+                            <option value="canada" data-i18n="加拿大">加拿大</option>
+                            <option value="usa" data-i18n="美国">美国</option>
+                            <option value="australia" data-i18n="澳大利亚">澳大利亚</option>
+                            <option value="centralasia" data-i18n="中亚">中亚</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" data-i18n="电价">电价 <span class="currency-unit">($/kWh)</span> <span class="required">*</span></label>
+                            <input type="number" class="form-input" id="electricityPrice" step="0.01" value="0.08" min="0" oninput="handlePriceChange()">
+                            <div class="error-message" id="electricityPriceError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="gasPriceGroup" style="display: none;">
+                        <label class="form-label" data-i18n="燃气价格">燃气价格 <span class="gas-unit">($/m³)</span></label>
+                        <input type="number" class="form-input" id="gasPrice" step="0.01" value="0.12" min="0" oninput="handlePriceChange()">
+                    </div>
+
+                    <div class="form-group" id="biomassPriceGroup" style="display: none;">
+                        <label class="form-label" data-i18n="生物质价格">生物质价格 <span class="biomass-unit">($/kWh)</span></label>
+                        <input type="number" class="form-input" id="biomassPrice" step="0.01" value="0.08" min="0" oninput="handlePriceChange()">
+                    </div>
+
+                    <div class="form-group" id="copGroup" style="display: none;">
+                        <label class="form-label" data-i18n="热泵 COP 值">热泵 COP 值 <span class="tip">(能效比)</span></label>
+                        <input type="number" class="form-input" id="copValue" step="0.1" value="3.5" min="1" oninput="handlePriceChange()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collapse Panel: 供暖时间 -->
+            <div class="collapse-panel">
+                <div class="collapse-header" onclick="toggleCollapse('timeCollapse')">
+                    <span data-i18n="供暖时间设置">供暖时间设置</span>
+                </div>
+                <div class="collapse-content show" id="timeCollapse">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" data-i18n="供暖季时长">供暖季时长</label>
+                            <select class="form-select" id="seasonSelect" onchange="handleSeasonChange()">
+                                <option value="12" data-i18n="12 个月（全年）">12 个月（全年）</option>
+                                <option value="6" data-i18n="6 个月">6 个月</option>
+                                <option value="4" data-i18n="4 个月">4 个月</option>
+                                <option value="custom" data-i18n="自定义">自定义</option>
+                            </select>
+                            <div class="custom-input-group" id="seasonCustomInput">
+                                <label data-i18n="请输入供暖月数（1-12）">请输入供暖月数（1-12）</label>
+                                <input type="number" class="form-input" id="seasonCustom" min="1" max="12" placeholder="1-12" onchange="validateCustomSeason()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-i18n="每日供热时长">每日供热时长</label>
+                            <select class="form-select" id="dailyHoursSelect" onchange="handleDailyHoursChange()">
+                                <option value="24" data-i18n="24 小时">24 小时</option>
+                                <option value="12" data-i18n="12 小时">12 小时</option>
+                                <option value="8" data-i18n="8 小时">8 小时</option>
+                                <option value="custom" data-i18n="自定义">自定义</option>
+                            </select>
+                            <div class="custom-input-group" id="dailyHoursCustomInput">
+                                <label data-i18n="请输入每日供热小时数（1-24）">请输入每日供热小时数（1-24）</label>
+                                <input type="number" class="form-input" id="dailyHoursCustom" min="1" max="24" placeholder="1-24" onchange="validateCustomDailyHours()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="goToStep2()" data-i18n="下一步">下一步</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Configuration -->
+        <div class="card hidden" id="step2">
+            <div class="card-title" data-i18n="步骤 2: 选择 ANTRACK 配置">步骤 2: 选择 ANTRACK 配置</div>
+
+            <div class="form-group">
+                <label class="form-label" data-i18n="热水温度需求">热水温度需求</label>
+                <select class="form-select" id="tempTypeSelect" onchange="calculateAntrackConfig()">
+                    <option value="ec2" data-i18n="50℃ 以下 (V2-EC2-DT)">50℃ 以下 (V2-EC2-DT)</option>
+                    <option value="ec4" data-i18n="50-80℃ (V2-EC4-DTHP)">50-80℃ (V2-EC4-DTHP)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" data-i18n="矿机型号">矿机型号</label>
+                <select class="form-select" id="minerModelSelect" onchange="calculateAntrackConfig()">
+                    <option value="s19xp" data-i18n="S19 XP+ Hyd. (293TH/s, 19J/T)">S19 XP+ Hyd. (293TH/s, 19J/T)</option>
+                    <option value="s21" data-i18n="S21+ Hyd. (358TH/s, 15J/T)">S21+ Hyd. (358TH/s, 15J/T)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" data-i18n="运行模式">运行模式</label>
+                <select class="form-select" id="runModeSelect" onchange="calculateAntrackConfig()">
+                    <option value="heating" data-i18n="供热时运行">供热时运行</option>
+                    <option value="continuous" data-i18n="持续运行 (24/7)">持续运行 (24/7)</option>
+                </select>
+            </div>
+
+            <div class="result-table">
+                <table>
+                    <tr><th data-i18n="参数">参数</th><th data-i18n="数值">数值</th></tr>
+                    <tr><td data-i18n="单套供热功率">单套供热功率</td><td id="singleSetHeatingPower">-- kW</td></tr>
+                    <tr><td data-i18n="矿机总功率">矿机总功率</td><td id="totalMinerPower">-- kW</td></tr>
+                    <tr><td data-i18n="ANTRACK 套数">ANTRACK 套数</td><td id="antrackSets">--</td></tr>
+                    <tr><td data-i18n="总投资">总投资</td><td id="totalInvestment">--</td></tr>
+                </table>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="goToStep1()" data-i18n="上一步">上一步</button>
+                <button class="btn btn-primary" onclick="goToStep3()" data-i18n="计算收益">计算收益</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Calculation -->
+        <div class="card hidden" id="step3">
+            <div class="card-title" data-i18n="步骤 3: 计算投资收益">步骤 3: 计算投资收益</div>
+            <div class="result-table">
+                <table>
+                    <tr><th data-i18n="计算项">计算项</th><th data-i18n="数值">数值</th></tr>
+                    <tr><td data-i18n="年度运行时长">年度运行时长</td><td id="annualHours">-- 小时</td></tr>
+                    <tr><td data-i18n="年度电费">年度电费</td><td id="annualElectricityCost">--</td></tr>
+                    <tr><td data-i18n="每日运行成本">每日运行成本</td><td id="dailyOperatingCost">--</td></tr>
+                    <tr><td data-i18n="每日 BTC 收益">每日 BTC 收益</td><td id="dailyBTCRevenue">--</td></tr>
+                    <tr><td data-i18n="每日净成本">每日净成本</td><td id="dailyNetCost">--</td></tr>
+                    <tr><td data-i18n="年度 BTC 收益">年度 BTC 收益</td><td id="annualBTCRevenue">--</td></tr>
+                    <tr><td data-i18n="ANTRACK 年度净成本">ANTRACK 年度净成本</td><td id="annualNetCost">--</td></tr>
+                </table>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="goToStep2()" data-i18n="上一步">上一步</button>
+                <button class="btn btn-primary" onclick="goToStep4()" data-i18n="查看结果">查看结果</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Results -->
+        <div class="card hidden" id="step4">
+            <div class="card-title" data-i18n="步骤 4: 收益结果">步骤 4: 收益结果</div>
+
+            <!-- 已有设备 - 显示结论 -->
+            <div id="existingResultSection" class="hidden">
+                <div class="conclusion-box">
+                    <div class="title" data-i18n="投资结论">📊 投资结论</div>
+                    <div class="content" id="conclusionText">
+                        正在计算...
+                    </div>
+                </div>
+            </div>
+
+            <!-- 投资组成明细 -->
+            <div class="result-table">
+                <table>
+                    <tr><th data-i18n="投资组成明细">投资组成明细</th><th data-i18n="金额">金额</th></tr>
+                    <tr><td data-i18n="ANTRACK 设备">ANTRACK 设备</td><td id="deviceCost">--</td></tr>
+                    <tr><td data-i18n="矿机成本">矿机成本</td><td id="minerCost">--</td></tr>
+                    <tr><td data-i18n="运费">运费</td><td id="shippingCost">--</td></tr>
+                    <tr><td data-i18n="安装费">安装费</td><td id="installCost">--</td></tr>
+                    <tr><td style="font-weight:600" data-i18n="总投资">总投资</td><td id="totalInvestmentDetail" style="font-weight:600">--</td></tr>
+                </table>
+            </div>
+
+            <!-- 核心指标 -->
+            <div class="metric-grid">
+                <div class="metric-card highlight">
+                    <div class="label" data-i18n="总投资">总投资</div>
+                    <div class="value" id="resultTotalInvestment">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label" data-i18n="年度 BTC 收益">年度 BTC 收益</div>
+                    <div class="value" id="resultBTCRevenue">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label" id="savingsLabel" data-i18n="年度节省">年度节省</div>
+                    <div class="value" id="resultAnnualSaving">--</div>
+                </div>
+                <div class="metric-card" id="paybackCard">
+                    <div class="label" data-i18n="投资回收期">投资回收期</div>
+                    <div class="value" id="resultPayback">--</div>
+                </div>
+            </div>
+
+            <!-- 名词解释区域 -->
+            <div class="definition-box">
+                <div class="term" data-i18n="名词解释">名词解释</div>
+                
+                <div class="definition-grid">
+                    <div class="definition-item">
+                        <span class="term" data-i18n="每日运行成本">每日运行成本</span>
+                        <span class="desc" data-i18n="每日运行成本公式">= 供热需求(kW) × 每日运行时长(h) × 电价($/kWh)</span>
+                    </div>
+                    
+                    <div class="definition-item">
+                        <span class="term" data-i18n="每日 BTC 收益">每日 BTC 收益</span>
+                        <span class="desc" data-i18n="每日 BTC 收益公式">= (ANTRACK总算力 ÷ 全网算力) × 3.125 × 144 × BTC价格</span>
+                    </div>
+                    
+                    <div class="definition-item">
+                        <span class="term" data-i18n="每日净成本">每日净成本</span>
+                        <span class="desc" data-i18n="每日净成本公式">= 每日运行成本 - 每日 BTC 收益</span>
+                    </div>
+                    
+                    <div class="definition-item">
+                        <span class="term" data-i18n="年度净成本">年度净成本</span>
+                        <span class="desc" data-i18n="年度净成本公式">= 年度电费 - 年度 BTC 收益（数值越小越好，负数表示盈利）</span>
+                    </div>
+                    
+                    <div class="definition-item">
+                        <span class="term" data-i18n="年度节省">年度节省</span>
+                        <span class="desc" data-i18n="年度节省公式">= 原设备年度成本 - ANTRACK 年度净成本（仅已有设备场景）</span>
+                    </div>
+                    
+                    <div class="definition-item">
+                        <span class="term" data-i18n="投资回收期">投资回收期</span>
+                        <span class="desc" data-i18n="投资回收期公式">= 总投资 ÷ 年度节省</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 新装 - 显示对比表格开关 -->
+            <div id="newInstallSection">
+                <div class="comparison-toggle">
+                    <div class="comparison-toggle-label" data-i18n="是否需要对比其他供热方案">📊 是否需要对比其他供热方案</div>
+                    <div class="toggle-switch">
+                        <div class="toggle-option active" onclick="toggleComparison(true)" data-i18n="是">是</div>
+                        <div class="toggle-option" onclick="toggleComparison(false)" data-i18n="否">否</div>
+                    </div>
+                </div>
+
+                <div id="comparisonTableContainer">
+                    <!-- 优雅的对比表格 -->
+                    <div class="comparison-header">
+                        <div data-i18n="供热方式">供热方式</div>
+                        <div data-i18n="设备投资">设备投资</div>
+                        <div data-i18n="年度运行成本">年度运行成本</div>
+                        <div data-i18n="5 年总成本">5年总成本</div>
+                    </div>
+                    <div class="comparison-container" id="comparisonBody"></div>
+                </div>
+            </div>
+
+            <!-- 现金流时间轴 -->
+            <div style="margin-top: 24px;">
+                <div class="result-table">
+                    <table>
+                        <tr><th data-i18n="项目">项目</th><th data-i18n="数值">数值</th></tr>
+                        <tr><td data-i18n="每日运行成本">每日运行成本</td><td id="resultDailyCost">--</td></tr>
+                        <tr><td data-i18n="每日净成本">每日净成本</td><td id="resultDailyNetCost">--</td></tr>
+                        <tr><td data-i18n="每日 BTC 收益">每日 BTC 收益</td><td id="resultDailyBTC">--</td></tr>
+                        <tr><td data-i18n="年度 BTC 收益">年度 BTC 收益</td><td id="resultBTCRevenue2">--</td></tr>
+                        <tr><td data-i18n="年度电费成本">年度电费成本</td><td id="resultElectricityCost">--</td></tr>
+                        <tr id="cumulative5Row"><td data-i18n="5年累计收益">5年累计收益</td><td id="result5Year">--</td></tr>
+                        <tr id="cumulative10Row"><td data-i18n="10年累计收益">10年累计收益</td><td id="result10Year">--</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="goToStep3()" data-i18n="上一步">上一步</button>
+                <button class="btn btn-secondary" onclick="resetCalculator()" data-i18n="重新计算">重新计算</button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p data-i18n="ANTRACK 收益计算器 footer">ANTRACK 收益计算器 | REQ-008 | v2.5.8</p>
+        </div>
+    </div>
+
+    <script>
+        // ===== 常量配置 =====
+        const EXCHANGE_RATES = { USD: 1.0, EUR: 0.92, GBP: 0.79, CAD: 1.36 };
+        const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£', CAD: 'C$' };
+        const CURRENCY_LABELS = { USD: '($/kWh)', EUR: '(€/kWh)', GBP: '(£/kWh)', CAD: '(C$/kWh)' };
+        const GAS_LABELS = { USD: '($/m³)', EUR: '(€/m³)', GBP: '(£/m³)', CAD: '(C$/m³)' };
+        const BIOMASS_LABELS = { USD: '($/kWh)', EUR: '(€/kWh)', GBP: '(£/kWh)', CAD: '(C$/kWh)' };
+
+        // 矿机参数
+        const MINERS = {
+            s19xp: { name: 'S19 XP+ Hyd.', hashrate: 293, efficiency: 19, pricePerT: 3 },
+            s21: { name: 'S21+ Hyd.', hashrate: 358, efficiency: 15, pricePerT: 8 }
+        };
+
+        // ANTRACK 价格（根据矿机）
+        const PRICING = {
+            s19xp: { ec2: 2688, ec4: 8288 },
+            s21: { ec2: 2888, ec4: 8888 }
+        };
+
+        // 运输安装费
+        const TRANSPORT = 1000, INSTALLATION = 500;
+
+        // 地区默认能源价格
+        const REGION_DEFAULTS = {
+            europe: { electricity: 0.08, gas: 0.12, biomass: 0.08, cop: 3.5 },
+            canada: { electricity: 0.10, gas: 1.2, biomass: 0.15, cop: 3.2 },
+            usa: { electricity: 0.08, gas: 1.0, biomass: 0.08, cop: 3.5 },
+            australia: { electricity: 0.15, gas: 1.5, biomass: 0.12, cop: 3.0 },
+            centralasia: { electricity: 0.06, gas: 0.5, biomass: 0.05, cop: 3.5 }
+        };
+
+        // 天然气热值 (kWh/m³)
+        const GAS_HEAT_VALUE = 10;
+
+        // 对比供热方式
+        const HEATING_METHODS = {
+            gas: { name: { zh: '燃气锅炉', en: 'Gas Boiler', de: 'Gasheizung' }, investMult: 0.8 },
+            heatpump: { name: { zh: '热泵', en: 'Heat Pump', de: 'Wärmepumpe' }, investMult: 1.2 },
+            electric: { name: { zh: '电锅炉', en: 'Electric Boiler', de: 'Elektrokessel' }, investMult: 0.6 },
+            biomass: { name: { zh: '生物质锅炉', en: 'Biomass Boiler', de: 'Biomassekessel' }, investMult: 1.0 }
+        };
+        
+        // 多语言文本
+        const I18N = {
+            zh: {
+                '步骤 1: 输入必要信息': '步骤 1: 输入必要信息',
+                '步骤 2: 选择 ANTRACK 配置': '步骤 2: 选择 ANTRACK 配置',
+                '步骤 3: 计算投资收益': '步骤 3: 计算投资收益',
+                '供热需求 (kW)': '供热需求 (kW)',
+                '电价': '电价',
+                '燃气价格': '燃气价格',
+                '生物质价格': '生物质价格',
+                '热泵 COP 值': '热泵 COP 值',
+                '供暖设备情况': '供暖设备情况',
+                '您当前有供暖设备吗？': '您当前有供暖设备吗？',
+                '没有（新装）': '没有（新装）',
+                '有': '有',
+                '选择现有供热方式': '选择现有供热方式',
+                '燃气锅炉': '燃气锅炉',
+                '热泵': '热泵',
+                '电锅炉': '电锅炉',
+                '生物质锅炉': '生物质锅炉',
+                '客户地区': '客户地区',
+                '供暖季时长': '供暖季时长',
+                '每日供热时长': '每日供热时长',
+                '热水温度需求': '热水温度需求',
+                '矿机型号': '矿机型号',
+                '运行模式': '运行模式',
+                '按供暖时运行': '按供暖时运行',
+                '持续运行（24 小时）': '持续运行（24 小时）',
+                '50℃以下 V2-EC2-DT': '50℃以下 V2-EC2-DT',
+                '50-80℃ V2-EC4-DTHP': '50-80℃ V2-EC4-DTHP',
+                'S19 XP+ Hyd. (293TH/s)': 'S19 XP+ Hyd. (293TH/s)',
+                'S21+ Hyd. (358TH/s)': 'S21+ Hyd. (358TH/s)',
+                '地区与能源价格': '地区与能源价格',
+                '欧洲': '欧洲',
+                '加拿大': '加拿大',
+                '美国': '美国',
+                '澳大利亚': '澳大利亚',
+                '中亚': '中亚',
+                '供暖时间设置': '供暖时间设置',
+                '12 个月（全年）': '12 个月（全年）',
+                '6 个月': '6 个月',
+                '4 个月': '4 个月',
+                '自定义': '自定义',
+                '下一步': '下一步',
+                '上一步': '上一步',
+                '计算收益': '计算收益',
+                '查看结果': '查看结果',
+                '重新计算': '重新计算',
+                '参数': '参数',
+                '数值': '数值',
+                '单套供热功率': '单套供热功率',
+                '矿机总功率': '矿机总功率',
+                'ANTRACK 套数': 'ANTRACK 套数',
+                '总投资': '总投资',
+                '计算项': '计算项',
+                '年度运行时长': '年度运行时长',
+                '年度电费': '年度电费',
+                '每日运行成本': '每日运行成本',
+                '每日 BTC 收益': '每日 BTC 收益',
+                '年度 BTC 收益': '年度 BTC 收益',
+                'ANTRACK 年度净成本': 'ANTRACK 年度净成本',
+                '投资组成明细': '投资组成明细',
+                '金额': '金额',
+                'ANTRACK 设备': 'ANTRACK 设备',
+                '矿机成本': '矿机成本',
+                '运费': '运费',
+                '安装费': '安装费',
+                '设备投资': '设备投资',
+                '年度运行成本': '年度运行成本',
+                '5 年总成本': '5 年总成本',
+                '是否需要对比其他供热方案': '是否需要对比其他供热方案',
+                '多花费': '多花费',
+                '年度节省': '年度节省',
+                '投资回收期': '投资回收期',
+                '年度净成本': '年度净成本',
+                '年度电费支出 - 年度 BTC 收益（数值越小越好，负数表示盈利）': '年度电费支出 - 年度 BTC 收益',
+                '（数值越小越好，负数表示盈利）': '（数值越小越好，负数表示盈利）',
+                '投资结论': '投资结论',
+                '供热方式': '供热方式',
+                '5年总成本': '5年总成本',
+                '是': '是',
+                '否': '否',
+                '项目': '项目',
+                '年度电费成本': '年度电费成本',
+                '5年累计收益': '5年累计收益',
+                '10年累计收益': '10年累计收益',
+                '5年累计净支出': '5年累计净支出',
+                '10年累计净支出': '10年累计净支出',
+                '相较于': '相较于',
+                '使用 ANTRACK 每年能节省': '使用 ANTRACK 每年能节省',
+                '投资回收期为': '投资回收期为',
+                '年': '年',
+                '节省': '节省',
+                '每日净成本': '每日净成本',
+                '名词解释': '名词解释',
+                '每日运行成本公式': '= 供热需求(kW) × 每日运行时长(h) × 电价($/kWh)',
+                '每日 BTC 收益公式': '= (ANTRACK总算力 ÷ 全网算力) × 3.125 × 144 × BTC价格',
+                '每日净成本公式': '= 每日运行成本 - 每日 BTC 收益',
+                '年度净成本公式': '= 年度电费 - 年度 BTC 收益（数值越小越好，负数表示盈利）',
+                '年度节省公式': '= 原设备年度成本 - ANTRACK 年度净成本（仅已有设备场景）',
+                '投资回收期公式': '= 总投资 ÷ 年度节省',
+                'BTC价格': 'BTC价格',
+                '全网算力': '全网算力',
+                '语言': '语言',
+                '货币': '货币',
+                '步骤 4: 收益结果': '步骤 4: 收益结果',
+                'ANTRACK 收益计算器 footer': 'ANTRACK 收益计算器 | REQ-008 | v2.5.8',
+                '小时': '小时',
+                '盈利': '盈利',
+                '请输入有效的供热需求': '请输入有效的供热需求',
+                '请输入有效的电价': '请输入有效的电价',
+                'EH/s': 'EH/s',
+                '中文': '中文',
+                '请输入每日供热小时数（1-24）': '请输入每日供热小时数（1-24）',
+                '请输入供暖月数（1-12）': '请输入供暖月数（1-12）',
+                '1-24': '1-24',
+                '1-12': '1-12',
+                '例如: 24': '例如: 24',
+                '8 小时': '8 小时',
+                '12 小时': '12 小时',
+                '24 小时': '24 小时',
+                'ANTRACK 收益计算器': 'ANTRACK 收益计算器',
+                '投资回报分析': '投资回报分析',
+                '收益计算': '收益计算',
+                'ANTRACK 配置': 'ANTRACK 配置',
+                '请选择现有供暖设备类型': '请选择现有供暖设备类型',
+                '持续运行 (24/7)': '持续运行 (24/7)',
+                '供热时运行': '供热时运行',
+                'S21+ Hyd. (358TH/s, 15J/T)': 'S21+ Hyd. (358TH/s, 15J/T)',
+                'S19 XP+ Hyd. (293TH/s, 19J/T)': 'S19 XP+ Hyd. (293TH/s, 19J/T)',
+                '50-80℃ (V2-EC4-DTHP)': '50-80℃ (V2-EC4-DTHP)',
+                '50℃ 以下 (V2-EC2-DT)': '50℃ 以下 (V2-EC2-DT)',
+            },
+            en: {
+                '步骤 1: 输入必要信息': 'Step 1: Enter Required Information',
+                '步骤 2: 选择 ANTRACK 配置': 'Step 2: ANTRACK Configuration',
+                '步骤 3: 计算投资收益': 'Step 3: Profit Calculation',
+                '供热需求 (kW)': 'Heating Demand (kW)',
+                '电价': 'Electricity Price',
+                '燃气价格': 'Gas Price',
+                '生物质价格': 'Biomass Price',
+                '热泵 COP 值': 'Heat Pump COP',
+                '供暖设备情况': 'Heating Equipment',
+                '您当前有供暖设备吗？': 'Do you have existing heating equipment?',
+                '没有（新装）': 'No (New Installation)',
+                '有': 'Yes',
+                '选择现有供热方式': 'Select Existing Heating Method',
+                '燃气锅炉': 'Gas Boiler',
+                '热泵': 'Heat Pump',
+                '电锅炉': 'Electric Boiler',
+                '生物质锅炉': 'Biomass Boiler',
+                '客户地区': 'Customer Region',
+                '供暖季时长': 'Heating Season',
+                '每日供热时长': 'Daily Heating Hours',
+                '热水温度需求': 'Hot Water Temperature',
+                '矿机型号': 'Miner Model',
+                '运行模式': 'Operation Mode',
+                '按供暖时运行': 'Run During Heating',
+                '持续运行（24 小时）': 'Continuous (24 Hours)',
+                '50℃以下 V2-EC2-DT': 'Below 50℃ V2-EC2-DT',
+                '50-80℃ V2-EC4-DTHP': '50-80℃ V2-EC4-DTHP',
+                'S19 XP+ Hyd. (293TH/s)': 'S19 XP+ Hyd. (293TH/s)',
+                'S21+ Hyd. (358TH/s)': 'S21+ Hyd. (358TH/s)',
+                '地区与能源价格': 'Region & Energy Prices',
+                '欧洲': 'Europe',
+                '加拿大': 'Canada',
+                '美国': 'USA',
+                '澳大利亚': 'Australia',
+                '中亚': 'Central Asia',
+                '供暖时间设置': 'Heating Schedule',
+                '12 个月（全年）': '12 Months (Year-round)',
+                '6 个月': '6 Months',
+                '4 个月': '4 Months',
+                '自定义': 'Custom',
+                '下一步': 'Next',
+                '上一步': 'Previous',
+                '计算收益': 'Calculate',
+                '查看结果': 'View Results',
+                '重新计算': 'Recalculate',
+                '参数': 'Parameter',
+                '数值': 'Value',
+                '单套供热功率': 'Single Set Heating Power',
+                '矿机总功率': 'Total Miner Power',
+                'ANTRACK 套数': 'ANTRACK Sets',
+                '总投资': 'Total Investment',
+                '计算项': 'Item',
+                '年度运行时长': 'Annual Hours',
+                '年度电费': 'Annual Electricity Cost',
+                '每日运行成本': 'Daily Operating Cost',
+                '每日 BTC 收益': 'Daily BTC Revenue',
+                '年度 BTC 收益': 'Annual BTC Revenue',
+                'ANTRACK 年度净成本': 'ANTRACK Annual Net Cost',
+                '投资组成明细': 'Investment Breakdown',
+                '金额': 'Amount',
+                'ANTRACK 设备': 'ANTRACK Device',
+                '矿机成本': 'Miner Cost',
+                '运费': 'Shipping',
+                '安装费': 'Installation',
+                '设备投资': 'Equipment Investment',
+                '年度运行成本': 'Annual Operating Cost',
+                '5 年总成本': '5-Year Total Cost',
+                '是否需要对比其他供热方案': 'Compare with Other Heating Options',
+                '多花费': 'Extra Cost',
+                '年度节省': 'Annual Savings',
+                '投资回收期': 'Payback Period',
+                '年度净成本': 'Annual Net Cost',
+                '年度电费支出 - 年度 BTC 收益（数值越小越好，负数表示盈利）': 'Annual Electricity Cost - Annual BTC Revenue',
+                '（数值越小越好，负数表示盈利）': '(Lower is better, negative means profit)',
+                '投资结论': 'Investment Conclusion',
+                '供热方式': 'Heating Method',
+                '5年总成本': '5-Year Total Cost',
+                '是': 'Yes',
+                '否': 'No',
+                '项目': 'Item',
+                '年度电费成本': 'Annual Electricity Cost',
+                '5年累计收益': '5-Year Cumulative',
+                '10年累计收益': '10-Year Cumulative',
+                '5年累计净支出': '5-Year Net Expense',
+                '10年累计净支出': '10-Year Net Expense',
+                '相较于': 'Compared to',
+                '使用 ANTRACK 每年能节省': 'Using ANTRACK saves',
+                '投资回收期为': 'Payback period is',
+                'year': 'year',
+                'saving': 'saving',
+                '每日净成本': 'Daily Net Cost',
+                '名词解释': 'Glossary',
+                '每日运行成本公式': '= Heating Demand (kW) × Daily Hours × Electricity Price ($/kWh)',
+                '每日 BTC 收益公式': '= (ANTRACK Total Hashrate ÷ Network Hashrate) × 3.125 × 144 × BTC Price',
+                '每日净成本公式': '= Daily Operating Cost - Daily BTC Revenue',
+                '年度净成本公式': '= Annual Electricity Cost - Annual BTC Revenue (lower is better, negative means profit)',
+                '年度节省公式': '= Original Equipment Annual Cost - ANTRACK Annual Net Cost (existing equipment only)',
+                '投资回收期公式': '= Total Investment ÷ Annual Savings',
+                'BTC价格': 'BTC Price',
+                '全网算力': 'Network Hashrate',
+                '语言': 'Language',
+                '货币': 'Currency',
+                '步骤 4: 收益结果': 'Step 4: Results',
+                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Calculator | REQ-008 | v2.5.8',
+                '小时': '小时',
+                '24 小时': '24 Stunden',
+                'hours': 'hours',
+                '盈利': 'profit',
+                '请输入有效的供热需求': 'Please enter valid heating demand',
+                '请输入有效的电价': 'Please enter valid electricity price',
+                'EH/s': 'EH/s',
+                '中文': '中文',
+                '请输入每日供热小时数（1-24）': '请输入每日供热小时数（1-24）',
+                '请输入供暖月数（1-12）': '请输入供暖月数（1-12）',
+                '1-24': '1-24',
+                '1-12': '1-12',
+                '例如: 24': '例如: 24',
+                '8 小时': '8 小时',
+                '12 小时': '12 小时',
+                'ANTRACK 收益计算器': 'ANTRACK ROI Calculator',
+                '投资回报分析': 'ROI Analysis',
+                '收益计算': 'Profit Calculation',
+                'ANTRACK 配置': 'ANTRACK Configuration',
+                'ANTRACK 热回收': 'ANTRACK Heat Recovery',
+                '最优': 'Best',
+                '多花费': 'Extra Cost',
+                '节省': 'Saving',
+                '请选择现有供暖设备类型': 'Please select heating equipment type',
+                '持续运行 (24/7)': 'Continuous (24/7)',
+                '供热时运行': 'Run During Heating',
+                'S21+ Hyd. (358TH/s, 15J/T)': 'S21+ Hyd. (358TH/s, 15J/T)',
+                'S19 XP+ Hyd. (293TH/s, 19J/T)': 'S19 XP+ Hyd. (293TH/s, 19J/T)',
+                '50-80℃ (V2-EC4-DTHP)': '50-80℃ (V2-EC4-DTHP)',
+                '50℃ 以下 (V2-EC2-DT)': 'Below 50℃ (V2-EC2-DT)',
+            },
+            de: {
+                '步骤 1: 输入必要信息': 'Schritt 1: Erforderliche Eingaben',
+                '步骤 2: 选择 ANTRACK 配置': 'Schritt 2: ANTRACK-Konfiguration',
+                '步骤 3: 计算投资收益': 'Schritt 3: Gewinnberechnung',
+                '供热需求 (kW)': 'Heizbedarf (kW)',
+                '电价': 'Strompreis',
+                '燃气价格': 'Gaspreis',
+                '生物质价格': 'Biomassepreis',
+                '热泵 COP 值': 'Wärmepumpe COP',
+                '供暖设备情况': 'Heizgeräte',
+                '您当前有供暖设备吗？': 'Haben Sie bereits eine Heizung?',
+                '没有（新装）': 'Nein (Neuinstallation)',
+                '有': 'Ja',
+                '选择现有供热方式': 'Bestehende Heizmethode wählen',
+                '燃气锅炉': 'Gasheizung',
+                '热泵': 'Wärmepumpe',
+                '电锅炉': 'Elektrokessel',
+                '生物质锅炉': 'Biomassekessel',
+                '客户地区': 'Kundenregion',
+                '供暖季时长': 'Heizsaison',
+                '每日供热时长': 'Tägliche Heizstunden',
+                '热水温度需求': 'Warmwassertemperatur',
+                '矿机型号': 'Miner-Modell',
+                '运行模式': 'Betriebsmodus',
+                '按供暖时运行': 'Während der Heizung laufen',
+                '持续运行（24 小时）': 'Dauerbetrieb (24 Stunden)',
+                '50℃以下 V2-EC2-DT': 'Unter 50℃ V2-EC2-DT',
+                '50-80℃ V2-EC4-DTHP': '50-80℃ V2-EC4-DTHP',
+                'S19 XP+ Hyd. (293TH/s)': 'S19 XP+ Hyd. (293TH/s)',
+                'S21+ Hyd. (358TH/s)': 'S21+ Hyd. (358TH/s)',
+                '地区与能源价格': 'Region & Energiepreise',
+                '欧洲': 'Europa',
+                '加拿大': 'Kanada',
+                '美国': 'USA',
+                '澳大利亚': 'Australien',
+                '中亚': 'Zentralasien',
+                '供暖时间设置': 'Heizzeitplan',
+                '12 个月（全年）': '12 Monate (ganzjährig)',
+                '6 个月': '6 Monate',
+                '4 个月': '4 Monate',
+                '自定义': 'Benutzerdefiniert',
+                '下一步': 'Weiter',
+                '上一步': 'Zurück',
+                '计算收益': 'Berechnen',
+                '查看结果': 'Ergebnisse',
+                '重新计算': 'Neuberechnen',
+                '参数': 'Parameter',
+                '数值': 'Wert',
+                '单套供热功率': 'Heizleistung pro Set',
+                '矿机总功率': 'Gesamte Minerleistung',
+                'ANTRACK 套数': 'ANTRACK Sätze',
+                '总投资': 'Gesamte Investition',
+                '计算项': 'Posten',
+                '年度运行时长': 'Jährliche Stunden',
+                '年度电费': 'Jährliche Stromkosten',
+                '每日运行成本': 'Tägliche Betriebskosten',
+                '每日 BTC 收益': 'Tägliche BTC-Einnahmen',
+                '年度 BTC 收益': 'Jährliche BTC-Einnahmen',
+                'ANTRACK 年度净成本': 'ANTRACK Jährliche Nettokosten',
+                '投资组成明细': 'Investitionsaufschlüsselung',
+                '金额': 'Betrag',
+                'ANTRACK 设备': 'ANTRACK Gerät',
+                '矿机成本': 'Miner-Kosten',
+                '运费': 'Versand',
+                '安装费': 'Installation',
+                '设备投资': 'Geräteinvestition',
+                '年度运行成本': 'Jährliche Betriebskosten',
+                '5 年总成本': '5-Jahres-Gesamtkosten',
+                '是否需要对比其他供热方案': 'Mit anderen Heizoptionen vergleichen',
+                '多花费': 'Mehrkosten',
+                '年度节省': 'Jährliche Einsparung',
+                '投资回收期': 'Amortisationszeit',
+                '年度净成本': 'Jährliche Nettokosten',
+                '年度电费支出 - 年度 BTC 收益（数值越小越好，负数表示盈利）': 'Jährliche Stromkosten - Jährliche BTC-Einnahmen',
+                '（数值越小越好，负数表示盈利）': '(Kleiner ist besser, negativ bedeutet Gewinn)',
+                '投资结论': 'Investitionsfazit',
+                '供热方式': 'Heizmethode',
+                '5年总成本': '5-Jahres-Gesamtkosten',
+                '是': 'Ja',
+                '否': 'Nein',
+                '项目': 'Posten',
+                '年度电费成本': 'Jährliche Stromkosten',
+                '5年累计收益': '5-Jahres-Kumuliert',
+                '10年累计收益': '10-Jahres-Kumuliert',
+                '5年累计净支出': '5-Jahres-Nettoausgaben',
+                '10年累计净支出': '10-Jahres-Nettoausgaben',
+                '相较于': 'Im Vergleich zu',
+                '使用 ANTRACK 每年能节省': 'ANTRACK spart jährlich',
+                '投资回收期为': 'Amortisation beträgt',
+                'Jahr': 'Jahr',
+                'sparen': 'sparen',
+                '每日净成本': 'Tägliche Nettokosten',
+                '名词解释': 'Begriffsdefinitionen',
+                '每日运行成本公式': '= Heizbedarf (kW) × Tägliche Stunden × Strompreis ($/kWh)',
+                '每日 BTC 收益公式': '= (ANTRACK Gesamthashrate ÷ Netzwerk-Hashrate) × 3.125 × 144 × BTC Preis',
+                '每日净成本公式': '= Tägliche Betriebskosten - Tägliche BTC-Einnahmen',
+                '年度净成本公式': '= Jährliche Stromkosten - Jährliche BTC-Einnahmen (kleiner ist besser, negativ bedeutet Gewinn)',
+                '年度节省公式': '= Jährliche Kosten des Originalgeräts - ANTRACK Jährliche Nettokosten (nur vorhandene Geräte)',
+                '投资回收期公式': '= Gesamte Investition ÷ Jährliche Einsparung',
+                'BTC价格': 'BTC Preis',
+                '全网算力': 'Netzwerk-Hashrate',
+                '语言': 'Sprache',
+                '货币': 'Währung',
+                '步骤 4: 收益结果': 'Schritt 4: Ergebnisse',
+                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Rechner | REQ-008 | v2.5.8',
+                '小时': 'Stunden',
+                '盈利': 'Gewinn',
+                '请输入有效的供热需求': 'Gültigen Heizbedarf eingeben',
+                '请输入有效的电价': 'Gültigen Strompreis eingeben',
+                'EH/s': 'EH/s',
+                '中文': 'Chinesisch',
+                '请输入每日供热小时数（1-24）': 'Tägliche Stunden eingeben (1-24)',
+                '请输入供暖月数（1-12）': 'Heizmonate eingeben (1-12)',
+                '1-24': '1-24',
+                '1-12': '1-12',
+                '例如: 24': 'z.B. 24',
+                '8 小时': '8 Stunden',
+                '12 小时': '12 Stunden',
+                '24 小时': '24 Stunden',
+                'ANTRACK 收益计算器': 'ANTRACK Rechner',
+                '投资回报分析': 'ROI-Analyse',
+                'ANTRACK 热回收': 'ANTRACK Wärmerückgewinnung',
+                '最优': 'Beste',
+                '多花费': 'Mehrkosten',
+                '节省': 'Einsparung',
+                '50℃ 以下 (V2-EC2-DT)': 'Unter 50℃ (V2-EC2-DT)',
+                'S19 XP+ Hyd. (293TH/s, 19J/T)': 'S19 XP+ Hyd. (293TH/s, 19J/T)',
+                '50-80℃ (V2-EC4-DTHP)': '50-80℃ (V2-EC4-DTHP)',
+                'S21+ Hyd. (358TH/s, 15J/T)': 'S21+ Hyd. (358TH/s, 15J/T)',
+                '收益计算': 'Rendite berechnen',
+                'ANTRACK 配置': 'ANTRACK Konfiguration',
+                'e.g., 24': 'e.g., 24',
+                '请选择现有供暖设备类型': 'Bitte Heiztyp wählen',
+                '持续运行 (24/7)': 'Dauerbetrieb (24/7)',
+                '供热时运行': 'Während der Heizung laufen',
+            }
+        };
+        
+        let state = { 
+            heatingDemand: 24, hasEquipment: 'no', equipmentType: 'gas', 
+            electricityPrice: 0.08, gasPrice: 0.12, biomassPrice: 0.08, copValue: 3.5,
+            region: 'europe', season: 12, dailyHours: 24, 
+            tempType: 'ec2', minerModel: 's19xp', runMode: 'continuous', showComparison: true,
+            btcPrice: 80000, networkHashrate: 1000, 
+            sets: 0, singleSetPower: 0, totalInvestment: 0,
+            deviceCost: 0, minerCost: 0,
+            annualElectricity: 0, annualBTCRevenue: 0, 
+            previousAnnualCost: 0, annualSavings: 0, payback: 0,
+            dailyOperatingCost: 0, dailyBTCRevenue: 0
+        };
+
+        // ===== 初始化 =====
+        window.onload = function() {
+            console.log('ANTRACK Calculator v2.5.8 loaded');
+        };
+
+        // ===== 语言切换 =====
+        function switchLanguage() {
+            // Update placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+                var key = el.getAttribute('data-i18n-placeholder');
+                if (I18N[lang] && I18N[lang][key]) {
+                    el.placeholder = I18N[lang][key];
+                }
+            });
+
+            var lang = document.getElementById('languageSelect').value;
+            
+            // 更新所有带 data-i18n 属性的元素
+            document.querySelectorAll('[data-i18n]').forEach(function(el) {
+                var key = el.getAttribute('data-i18n');
+                if (I18N[lang] && I18N[lang][key]) {
+                    el.textContent = I18N[lang][key];
+                }
+            });
+            
+            // 更新 select 选项
+            document.querySelectorAll('select option[data-i18n]').forEach(function(opt) {
+                var key = opt.getAttribute('data-i18n');
+                if (I18N[lang] && I18N[lang][key]) {
+                    opt.textContent = I18N[lang][key];
+                }
+            });
+            
+            // 重新计算并更新显示
+            if (state.totalInvestment > 0) {
+                updateStep4Display();
+                if (state.showComparison) calculateComparison();
+            }
+        }
+
+        // ===== 刷新 BTC 数据 =====
+        async function refreshBTCData() {
+            var btns = document.querySelectorAll('.btc-refresh');
+            btns.forEach(function(btn) {
+                btn.textContent = '...';
+                btn.disabled = true;
+            });
+            
+            try {
+                // 从 CoinGecko 获取 BTC 价格
+                const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+                const data = await res.json();
+                if (data && data.bitcoin && data.bitcoin.usd) {
+                    // 更新 state
+                    state.btcPrice = parseFloat(data.bitcoin.usd);
+                    // 同时更新显示
+                    document.getElementById('btcPriceInput').value = state.btcPrice;
+                }
+            } catch (e) {
+                console.log('BTC价格获取失败');
+            }
+            
+            try {
+                // 从 Blockchain.info 获取全网算力
+                const res = await fetch('https://blockchain.info/q/hashrate');
+                const hashrate = await res.text();
+                if (hashrate && !isNaN(hashrate)) {
+                    // 更新 state
+                    state.networkHashrate = parseFloat(hashrate) / 1e18;
+                    // 同时更新显示
+                    document.getElementById('networkHashrateInput').value = state.networkHashrate.toFixed(2);
+                }
+            } catch (e) {
+                console.log('全网算力获取失败');
+            }
+            
+            btns.forEach(function(btn) {
+                btn.textContent = '↻';
+                btn.disabled = false;
+            });
+            
+            alert('数据已更新：\nBTC价格：$' + state.btcPrice.toLocaleString() + '\n全网算力：' + state.networkHashrate.toFixed(2) + ' EH/s');
+            
+            // 手动触发重新计算
+            if (state.totalInvestment > 0) {
+                calculateInvestment();
+                updateStep4Display();
+                if (state.showComparison) calculateComparison();
+            }
+        }
+
+        function updateBTCFromInput() {
+            var currency = document.getElementById('currencySelect').value;
+            var rate = EXCHANGE_RATES[currency];
+            // 将当前货币的 BTC 价格换算回 USD 存储
+            var inputPrice = parseFloat(document.getElementById('btcPriceInput').value) || 80000;
+            state.btcPrice = inputPrice / rate;
+        }
+
+        function updateHashrateFromInput() {
+            state.networkHashrate = parseFloat(document.getElementById('networkHashrateInput').value) || 1000;
+        }
+
+        // ===== 价格变化处理 =====
+        function handlePriceChange() {
+            state.electricityPrice = parseFloat(document.getElementById('electricityPrice').value) || 0.08;
+            state.gasPrice = parseFloat(document.getElementById('gasPrice').value) || 0.12;
+            state.biomassPrice = parseFloat(document.getElementById('biomassPrice').value) || 0.08;
+            state.copValue = parseFloat(document.getElementById('copValue').value) || 3.5;
+            
+            // 如果在步骤 3 或 4，重新计算
+            if (!document.getElementById('step3').classList.contains('hidden')) {
+                calculateInvestment();
+            }
+            if (!document.getElementById('step4').classList.contains('hidden')) {
+                calculateInvestment();
+                updateStep4Display();
+                if (state.showComparison) calculateComparison();
+            }
+        }
+
+        // ===== 折叠面板 =====
+        function toggleCollapse(collapseId) {
+            var content = document.getElementById(collapseId);
+            var header = content.previousElementSibling;
+            content.classList.toggle('show');
+            header.classList.toggle('active');
+        }
+
+        // ===== 地区选择 =====
+        function handleRegionChange() {
+            var region = document.getElementById('regionSelect').value;
+            state.region = region;
+            
+            var defaults = REGION_DEFAULTS[region];
+            document.getElementById('electricityPrice').value = defaults.electricity;
+            document.getElementById('gasPrice').value = defaults.gas;
+            document.getElementById('biomassPrice').value = defaults.biomass;
+            document.getElementById('copValue').value = defaults.cop;
+            
+            // 显示/隐藏相关输入
+            updateEnergyInputsVisibility();
+        }
+
+        function updateEnergyInputsVisibility() {
+            var equipmentType = document.getElementById('equipmentTypeSelect').value;
+            var hasEquipment = document.getElementById('hasEquipmentSelect').value;
+            
+            var gasGroup = document.getElementById('gasPriceGroup');
+            var biomassGroup = document.getElementById('biomassPriceGroup');
+            var copGroup = document.getElementById('copGroup');
+            
+            gasGroup.style.display = 'none';
+            biomassGroup.style.display = 'none';
+            copGroup.style.display = 'none';
+            
+            if (hasEquipment === 'yes') {
+                if (equipmentType === 'gas') gasGroup.style.display = 'block';
+                if (equipmentType === 'biomass') biomassGroup.style.display = 'block';
+                if (equipmentType === 'heatpump') copGroup.style.display = 'block';
+            }
+        }
+
+        // ===== 供暖设备选择 =====
+        function handleEquipmentChange() {
+            var hasEquipment = document.getElementById('hasEquipmentSelect').value;
+            state.hasEquipment = hasEquipment;
+            
+            var equipmentTypeGroup = document.getElementById('equipmentTypeGroup');
+            if (hasEquipment === 'yes') {
+                equipmentTypeGroup.style.display = 'block';
+            } else {
+                equipmentTypeGroup.style.display = 'none';
+            }
+            
+            updateEnergyInputsVisibility();
+        }
+
+        function updateEquipmentType() {
+            state.equipmentType = document.getElementById('equipmentTypeSelect').value;
+            updateEnergyInputsVisibility();
+        }
+
+        // ===== 自定义参数 =====
+        function handleSeasonChange() {
+            var select = document.getElementById('seasonSelect');
+            var customInput = document.getElementById('seasonCustomInput');
+            if (select.value === 'custom') {
+                customInput.classList.add('show');
+                document.getElementById('seasonCustom').focus();
+            } else {
+                customInput.classList.remove('show');
+                state.season = parseInt(select.value);
+            }
+        }
+
+        function handleDailyHoursChange() {
+            var select = document.getElementById('dailyHoursSelect');
+            var customInput = document.getElementById('dailyHoursCustomInput');
+            if (select.value === 'custom') {
+                customInput.classList.add('show');
+                document.getElementById('dailyHoursCustom').focus();
+            } else {
+                customInput.classList.remove('show');
+                state.dailyHours = parseInt(select.value);
+            }
+        }
+
+        function validateCustomSeason() {
+            var input = document.getElementById('seasonCustom');
+            var value = parseInt(input.value);
+            if (isNaN(value) || value < 1) value = 1;
+            if (value > 12) value = 12;
+            input.value = value;
+            state.season = value;
+        }
+
+        function validateCustomDailyHours() {
+            var input = document.getElementById('dailyHoursCustom');
+            var value = parseInt(input.value);
+            if (isNaN(value) || value < 1) value = 1;
+            if (value > 24) value = 24;
+            input.value = value;
+            state.dailyHours = value;
+        }
+
+        // ===== 表单验证 =====
+        function validateStep1() {
+            var valid = true;
+            var heatingDemandValue = document.getElementById('heatingDemand').value;
+            var electricityPriceValue = document.getElementById('electricityPrice').value;
+            var heatingDemand = parseFloat(heatingDemandValue);
+            var electricityPrice = parseFloat(electricityPriceValue);
+            
+            document.getElementById('heatingDemandError').textContent = '';
+            document.getElementById('electricityPriceError').textContent = '';
+            document.getElementById('heatingDemand').classList.remove('error');
+            document.getElementById('electricityPrice').classList.remove('error');
+            
+            if (!heatingDemandValue || isNaN(heatingDemand) || heatingDemand <= 0) {
+                document.getElementById('heatingDemandError').textContent = (I18N[lang] && I18N[lang]['请输入有效的供热需求']) || '请输入有效的供热需求';
+                document.getElementById('heatingDemand').classList.add('error');
+                valid = false;
+            }
+            if (!electricityPriceValue || isNaN(electricityPrice) || electricityPrice < 0) {
+                document.getElementById('electricityPriceError').textContent = (I18N[lang] && I18N[lang]['请输入有效的电价']) || '请输入有效的电价';
+                document.getElementById('electricityPrice').classList.add('error');
+                valid = false;
+            }
+            return valid;
+        }
+
+        // ===== 步骤导航 =====
+        function goToStep1() { showStep(1); }
+        
+        function goToStep2() {
+            if (!validateStep1()) return;
+            
+            var seasonSelect = document.getElementById('seasonSelect');
+            var dailyHoursSelect = document.getElementById('dailyHoursSelect');
+            state.season = seasonSelect.value === 'custom' ? (parseInt(document.getElementById('seasonCustom').value) || 12) : parseInt(seasonSelect.value);
+            state.dailyHours = dailyHoursSelect.value === 'custom' ? (parseInt(document.getElementById('dailyHoursCustom').value) || 24) : parseInt(dailyHoursSelect.value);
+            
+            state.heatingDemand = parseFloat(document.getElementById('heatingDemand').value);
+            state.electricityPrice = parseFloat(document.getElementById('electricityPrice').value);
+            state.gasPrice = parseFloat(document.getElementById('gasPrice').value);
+            state.biomassPrice = parseFloat(document.getElementById('biomassPrice').value);
+            state.copValue = parseFloat(document.getElementById('copValue').value);
+            
+            calculateAntrackConfig();
+            showStep(2);
+        }
+        
+        function goToStep3() { 
+            calculateInvestment(); 
+            showStep(3); 
+        }
+        
+        function goToStep4() { 
+            updateStep4Display();
+            showStep(4); 
+        }
+
+        function showStep(step) {
+            for (var i = 1; i <= 4; i++) {
+                var el = document.getElementById('step' + i);
+                var dot = document.getElementById('stepDot' + i);
+                if (i === step) {
+                    el.classList.remove('hidden');
+                    dot.classList.add('active');
+                } else {
+                    el.classList.add('hidden');
+                    dot.classList.remove('active');
+                }
+                if (i < step) dot.classList.add('completed');
+                else dot.classList.remove('completed');
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ===== 对比表格切换 =====
+        function toggleComparison(show) {
+            state.showComparison = show;
+            var options = document.querySelectorAll('.toggle-option');
+            options[0].classList.toggle('active', show);
+            options[1].classList.toggle('active', !show);
+            var tableContainer = document.getElementById('comparisonTableContainer');
+            if (show) {
+                tableContainer.classList.remove('hidden');
+                calculateComparison();
+            } else {
+                tableContainer.classList.add('hidden');
+            }
+        }
+
+        // ===== 计算 ANTRACK 配置 =====
+        function calculateAntrackConfig() {
+            state.tempType = document.getElementById('tempTypeSelect').value;
+            state.minerModel = document.getElementById('minerModelSelect').value;
+            state.runMode = document.getElementById('runModeSelect').value;
+            
+            var miner = MINERS[state.minerModel];
+            var singleMinerPower = miner.hashrate * miner.efficiency / 1000;
+            var singleSetHeatingPower = state.tempType === 'ec2' ? singleMinerPower * 4 : singleMinerPower * 4 + 8;
+            var unitPrice = PRICING[state.minerModel][state.tempType];
+            
+            var sets = Math.max(1, Math.floor(state.heatingDemand / singleSetHeatingPower));
+            if (state.heatingDemand - sets * singleSetHeatingPower >= singleMinerPower) sets++;
+            
+            var minerTotalCost = miner.hashrate * miner.pricePerT * 4;
+            var totalInvestment = (unitPrice + minerTotalCost + TRANSPORT + INSTALLATION) * sets;
+            
+            document.getElementById('singleSetHeatingPower').textContent = singleSetHeatingPower.toFixed(2) + ' kW';
+            document.getElementById('totalMinerPower').textContent = (singleMinerPower * 4 * sets).toFixed(2) + ' kW';
+            document.getElementById('antrackSets').textContent = sets;
+            document.getElementById('totalInvestment').textContent = formatCurrency(totalInvestment);
+            
+            state.sets = sets;
+            state.singleSetPower = singleSetHeatingPower;
+            state.totalInvestment = totalInvestment;
+            state.deviceCost = unitPrice * sets;
+            state.minerCost = minerTotalCost * sets;
+        }
+
+        // ===== 计算投资收益 =====
+        function calculateInvestment() {
+            var annualHours = state.runMode === 'continuous' ? 8760 : state.season * 30 * state.dailyHours;
+            var totalPower = state.singleSetPower * state.sets;
+            var annualElectricity = annualHours * totalPower * state.electricityPrice;
+            // 每日运行时长
+            var dailyHeatingHours = (state.runMode === 'continuous') ? 24 : state.dailyHours;
+            // 每日供热需求 (kWh)
+            var dailyEnergy = state.heatingDemand * dailyHeatingHours;
+            // 每日运行成本 = 每日供热需求 × 电价
+            var dailyOperatingCost = dailyEnergy * state.electricityPrice;
+            
+            var miner = MINERS[state.minerModel];
+            var totalHashrate = miner.hashrate * 4 * state.sets * 1000;
+            var dailyBTC = (totalHashrate / (state.networkHashrate * 1e9)) * 3.125 * 144;
+            state.dailyBTCRevenue = dailyBTC * state.btcPrice;
+            var operatingDays = state.runMode === 'continuous' ? 365 : (annualHours / 24);
+            state.annualBTCRevenue = state.dailyBTCRevenue * operatingDays;
+            
+            // ANTRACK 年度净成本 = 电费 - BTC 收益
+            var annualNetCost = annualElectricity - state.annualBTCRevenue;
+            
+            // 计算原设备年度成本（正确的计算方式）
+            var method = HEATING_METHODS[state.equipmentType];
+            var annualEnergy = annualHours * state.heatingDemand;
+            var previousAnnualCost = 0;
+            
+            if (state.hasEquipment === 'yes') {
+                if (state.equipmentType === 'heatpump') {
+                    // 热泵：年度成本 = 年供热需求 ÷ COP ÷ 电价
+                    previousAnnualCost = (annualEnergy / state.copValue) * state.electricityPrice;
+                } else if (state.equipmentType === 'gas') {
+                    // 燃气锅炉：年度成本 = 年供热需求 ÷ 效率 ÷ 热值 × 燃气价格
+                    previousAnnualCost = (annualEnergy / 0.92 / GAS_HEAT_VALUE) * state.gasPrice;
+                } else if (state.equipmentType === 'biomass') {
+                    // 生物质：年度成本 = 年供热需求 ÷ 效率 × 生物质价格
+                    previousAnnualCost = (annualEnergy / 0.85) * state.biomassPrice;
+                } else if (state.equipmentType === 'electric') {
+                    // 电锅炉：年度成本 = 年供热需求 ÷ 效率 × 电价
+                    previousAnnualCost = (annualEnergy / 0.98) * state.electricityPrice;
+                }
+            }
+            
+            // 年度节省 = 原设备成本 - ANTRACK 净成本
+            var annualSavings = previousAnnualCost - annualNetCost;
+            
+            // 投资回收期 = 总投资 / 年度节省
+            var payback = annualSavings > 0 ? state.totalInvestment / annualSavings : 999;
+            
+            document.getElementById('annualHours').textContent = annualHours.toLocaleString() + ' ' + (document.getElementById('languageSelect').value === 'zh' ? '小时' : 'hours');
+            document.getElementById('annualElectricityCost').textContent = formatCurrency(annualElectricity);
+            document.getElementById('dailyOperatingCost').textContent = formatCurrency(dailyOperatingCost);
+            document.getElementById('dailyBTCRevenue').textContent = formatCurrency(state.dailyBTCRevenue);
+            // 每日净成本
+            var dailyNetCost = dailyOperatingCost - state.dailyBTCRevenue;
+            var dailyNetCostEl = document.getElementById('dailyNetCost');
+            dailyNetCostEl.textContent = formatCurrency(dailyNetCost);
+            if (dailyNetCost < 0) {
+                dailyNetCostEl.style.color = 'var(--success-color)';
+            } else {
+                dailyNetCostEl.style.color = 'var(--text-primary)';
+            }
+            document.getElementById('annualBTCRevenue').textContent = formatCurrency(state.annualBTCRevenue);
+            var netCostEl = document.getElementById('annualNetCost');
+            netCostEl.textContent = formatCurrency(annualNetCost);
+            if (annualNetCost < 0) {
+                netCostEl.style.color = 'var(--success-color)';
+                netCostEl.textContent = '-' + formatCurrency(Math.abs(annualNetCost)) + ' (盈利)';
+            } else {
+                netCostEl.style.color = 'var(--text-primary)';
+            }
+            
+            state.annualHours = annualHours;
+            state.annualElectricity = annualElectricity;
+            state.dailyOperatingCost = dailyOperatingCost;
+            state.annualBTCRevenue = state.annualBTCRevenue;
+            state.annualNetCost = annualNetCost;
+            state.previousAnnualCost = previousAnnualCost;
+            state.annualSavings = annualSavings;
+            state.payback = payback;
+        }
+
+        // ===== 优雅的对比表格 =====
+        function calculateComparison() {
+            var baseInvest = state.totalInvestment;
+            var annualEnergy = state.annualHours * state.heatingDemand;
+            var rows = [];
+            var lang = document.getElementById('languageSelect').value;
+            
+            // 计算 ANTRACK 5 年总成本
+            var antrackFiveYear = baseInvest + state.annualNetCost * 5;
+            
+            Object.keys(HEATING_METHODS).forEach(function(key) {
+                var method = HEATING_METHODS[key];
+                var invest = baseInvest * method.investMult;
+                
+                // 计算各供热方式的年度成本（正确的计算方式）
+                var annualCost;
+                if (key === 'heatpump') {
+                    annualCost = (annualEnergy / state.copValue) * state.electricityPrice;
+                } else if (key === 'gas') {
+                    annualCost = (annualEnergy / 0.92 / GAS_HEAT_VALUE) * state.gasPrice;
+                } else if (key === 'biomass') {
+                    annualCost = (annualEnergy / 0.85) * state.biomassPrice;
+                } else if (key === 'electric') {
+                    annualCost = (annualEnergy / 0.98) * state.electricityPrice;
+                }
+                
+                var fiveYearCost = invest + annualCost * 5;
+                var savings = fiveYearCost - antrackFiveYear;
+                rows.push({ 
+                    key: key, 
+                    name: method.name[lang] || method.name.zh, 
+                    invest: invest, 
+                    annualCost: annualCost, 
+                    fiveYearCost: fiveYearCost, 
+                    savings: savings 
+                });
+            });
+            
+            // 添加 ANTRACK 行
+                        // 获取当前语言
+            var lang = document.getElementById('languageSelect').value;
+            var antrackName = I18N[lang] && I18N[lang]['ANTRACK 热回收'] ? I18N[lang]['ANTRACK 热回收'] : 'ANTRACK 热回收';
+            
+            rows.push({ 
+                key: 'antrack', 
+                name: antrackName, 
+                invest: baseInvest, 
+                annualCost: state.annualNetCost, 
+                fiveYearCost: antrackFiveYear, 
+                savings: 0, 
+                isBest: true 
+            });
+
+            // 按 5 年总成本排序
+            rows.sort(function(a, b) { return a.fiveYearCost - b.fiveYearCost; });
+            
+            // 找到最大值用于进度条
+            var maxCost = Math.max.apply(null, rows.map(function(r) { return r.fiveYearCost; }));
+            var minCost = Math.min.apply(null, rows.map(function(r) { return r.fiveYearCost; }));
+            var costRange = maxCost - minCost || 1;
+            
+            var container = document.getElementById('comparisonBody');
+            var html = '';
+            rows.forEach(function(r) {
+                var isBest = r.isBest;
+                var bestLabel = I18N[lang] && I18N[lang]['最优'] ? I18N[lang]['最优'] : '最优';
+                var badge = isBest ? '<span class="badge">✓ ' + bestLabel + '</span>' : '';
+                var savingsClass = r.savings >= 0 ? 'positive' : 'negative';
+                var savingsPercent = ((r.fiveYearCost - minCost) / costRange) * 100;
+                var barWidth = isBest ? 0 : savingsPercent;
+                var extraCostLabel = I18N[lang] && I18N[lang]['多花费'] ? I18N[lang]['多花费'] : '多花费';
+                var saveLabel = I18N[lang] && I18N[lang]['节省'] ? I18N[lang]['节省'] : '节省';
+                
+                html += '<div class="comparison-card' + (isBest ? ' best-option' : '') + '">' +
+                    '<div class="method-name">' + r.name + badge + '</div>' +
+                    '<div class="method-cost"><span>' + formatCurrency(r.invest) + '</span></div>' +
+                    '<div class="method-cost"><span>' + formatCurrency(r.annualCost) + '</span></div>' +
+                    '<div>' +
+                        '<div class="method-cost" style="margin-bottom:6px;"><span>' + formatCurrency(r.fiveYearCost) + '</span></div>' +
+                        '<div class="savings-bar"><div class="savings-bar-fill ' + savingsClass + '" style="width:' + barWidth + '%"></div></div>' +
+                        '<div class="savings-text ' + savingsClass + '">' + (r.savings >= 0 ? extraCostLabel + ' ' + formatCurrency(r.savings) : saveLabel + ' ' + formatCurrency(Math.abs(r.savings))) + '</div>' +
+                    '</div>' +
+                '</div>';
+            });
+            container.innerHTML = html;
+        }
+
+        // ===== 货币格式化 =====
+        function formatCurrency(value) {
+            var currency = document.getElementById('currencySelect').value;
+            var rate = EXCHANGE_RATES[currency];
+            var symbol = CURRENCY_SYMBOLS[currency];
+            var convertedValue = value * rate;
+            return symbol + convertedValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+
+        // ===== 货币切换 =====
+        function switchCurrency() {
+            var currency = document.getElementById('currencySelect').value;
+            var rate = EXCHANGE_RATES[currency];
+            var symbol = CURRENCY_SYMBOLS[currency];
+            
+            document.querySelectorAll('.currency-unit').forEach(function(el) {
+                el.textContent = CURRENCY_LABELS[currency];
+            });
+            document.querySelectorAll('.gas-unit').forEach(function(el) {
+                el.textContent = GAS_LABELS[currency];
+            });
+            document.querySelectorAll('.biomass-unit').forEach(function(el) {
+                el.textContent = BIOMASS_LABELS[currency];
+            });
+            
+            // 更新 BTC 价格符号和数值
+            document.getElementById('btcCurrencySymbol').textContent = symbol;
+            document.getElementById('btcPriceInput').value = (state.btcPrice * rate).toFixed(0);
+            
+            if (!document.getElementById('step2').classList.contains('hidden')) {
+                document.getElementById('totalInvestment').textContent = formatCurrency(state.totalInvestment);
+            }
+            if (!document.getElementById('step3').classList.contains('hidden')) {
+                document.getElementById('annualElectricityCost').textContent = formatCurrency(state.annualElectricity);
+                document.getElementById('dailyOperatingCost').textContent = formatCurrency(state.dailyOperatingCost);
+                document.getElementById('dailyBTCRevenue').textContent = formatCurrency(state.dailyBTCRevenue);
+                document.getElementById('dailyNetCost').textContent = formatCurrency(state.dailyOperatingCost - state.dailyBTCRevenue);
+                document.getElementById('annualBTCRevenue').textContent = formatCurrency(state.annualBTCRevenue);
+                var netCost = state.annualElectricity - state.annualBTCRevenue;
+                document.getElementById('annualNetCost').textContent = formatCurrency(netCost);
+            }
+            if (!document.getElementById('step4').classList.contains('hidden')) updateStep4Display();
+        }
+
+        // ===== 步骤 4 显示 =====
+        function updateStep4Display() {
+            var lang = document.getElementById('languageSelect').value;
+            var hasEquipment = document.getElementById('hasEquipmentSelect').value;
+            
+            var existingSection = document.getElementById('existingResultSection');
+            var newInstallSection = document.getElementById('newInstallSection');
+            var paybackCard = document.getElementById('paybackCard');
+            var savingsLabel = document.getElementById('savingsLabel');
+            
+            // 投资组成明细
+            document.getElementById('deviceCost').textContent = formatCurrency(state.deviceCost);
+            document.getElementById('minerCost').textContent = formatCurrency(state.minerCost);
+            document.getElementById('shippingCost').textContent = formatCurrency(TRANSPORT * state.sets);
+            document.getElementById('installCost').textContent = formatCurrency(INSTALLATION * state.sets);
+            document.getElementById('totalInvestmentDetail').textContent = formatCurrency(state.totalInvestment);
+            
+            if (hasEquipment === 'yes') {
+                // 已有设备场景
+                existingSection.classList.remove('hidden');
+                newInstallSection.classList.remove('hidden');
+                paybackCard.classList.remove('hidden');
+                savingsLabel.textContent = (lang === 'zh' ? '年度节省' : lang === 'en' ? 'Annual Savings' : 'Jährliche Einsparung');
+                
+                // 生成结论
+                var equipmentType = document.getElementById('equipmentTypeSelect').value;
+                var equipmentName = HEATING_METHODS[equipmentType].name[lang] || HEATING_METHODS[equipmentType].name.zh;
+                var paybackYears = state.payback >= 999 ? '>10' : state.payback.toFixed(1);
+                var annualSavingsStr = formatCurrency(state.annualSavings);
+                
+                // 计算节省百分比
+                var savingsPercent = state.previousAnnualCost > 0 ? (state.annualSavings / state.previousAnnualCost * 100).toFixed(1) : 0;
+                
+                document.getElementById('conclusionText').innerHTML = 
+                    (lang === 'zh' ? '相较于 ' : lang === 'en' ? 'Compared to ' : 'Im Vergleich zu ') + 
+                    '<strong>' + equipmentName + '</strong>，' +
+                    (lang === 'zh' ? '使用 ANTRACK 每年能节省 <span class="highlight">' + annualSavingsStr + '</span>（节省 ' + savingsPercent + '%）' : 
+                     lang === 'en' ? 'Using ANTRACK saves <span class="highlight">' + annualSavingsStr + '</span> (' + savingsPercent + '% saving)' :
+                     'ANTRACK spart jährlich <span class="highlight">' + annualSavingsStr + '</span> (' + savingsPercent + '% sparen)') + 
+                    '，' +
+                    (lang === 'zh' ? '投资回收期为 <strong>' + paybackYears + ' 年</strong>' : 
+                     lang === 'en' ? ', payback period is <strong>' + paybackYears + ' years</strong>' :
+                     ', Amortisation beträgt <strong>' + paybackYears + ' ' + (lang === 'de' ? 'Jahr' : 'years') + '</strong>');
+                
+                // 更新对比表格
+                if (state.showComparison) calculateComparison();
+            } else {
+                // 新装场景
+                existingSection.classList.add('hidden');
+                newInstallSection.classList.remove('hidden');
+                paybackCard.classList.add('hidden');
+                savingsLabel.textContent = (lang === 'zh' ? '年度净成本' : lang === 'en' ? 'Annual Net Cost' : 'Jährliche Nettokosten');
+                
+                if (state.showComparison) {
+                    calculateComparison();
+                }
+            }
+            
+            // 核心指标
+            document.getElementById('resultTotalInvestment').textContent = formatCurrency(state.totalInvestment);
+            document.getElementById('resultBTCRevenue').textContent = formatCurrency(state.annualBTCRevenue);
+            
+            var displaySaving = hasEquipment === 'yes' ? state.annualSavings : state.annualNetCost;
+            var savingEl = document.getElementById('resultAnnualSaving');
+            savingEl.textContent = formatCurrency(displaySaving);
+            if (hasEquipment !== 'yes' && displaySaving < 0) {
+                savingEl.style.color = 'var(--success-color)';
+            } else {
+                savingEl.style.color = 'var(--text-primary)';
+            }
+            
+            document.getElementById('resultPayback').textContent = state.payback >= 999 ? '>10 ' + (lang === 'zh' ? '年' : 'years') : state.payback.toFixed(1) + ' ' + (lang === 'zh' ? '年' : 'years');
+            
+            // 现金流
+            document.getElementById('resultDailyCost').textContent = formatCurrency(state.dailyOperatingCost);
+            var dailyNetCost = state.dailyOperatingCost - state.dailyBTCRevenue;
+            var dailyNetCostEl = document.getElementById('resultDailyNetCost');
+            dailyNetCostEl.textContent = formatCurrency(dailyNetCost);
+            if (dailyNetCost < 0) {
+                dailyNetCostEl.style.color = 'var(--success-color)';
+            } else {
+                dailyNetCostEl.style.color = 'var(--text-primary)';
+            }
+            document.getElementById('resultDailyBTC').textContent = formatCurrency(state.dailyBTCRevenue);
+            document.getElementById('resultBTCRevenue2').textContent = formatCurrency(state.annualBTCRevenue);
+            document.getElementById('resultElectricityCost').textContent = formatCurrency(state.annualElectricity);
+            
+            // 累计收益/支出：已有设备显示节省，新装显示净支出
+            var cumulative5Year, cumulative10Year;
+            var label5Key, label10Key;
+            
+            if (hasEquipment === 'yes') {
+                cumulative5Year = state.annualSavings * 5;
+                cumulative10Year = state.annualSavings * 10;
+                label5Key = '5 年累计收益';
+                label10Key = '10 年累计收益';
+            } else {
+                // 新装：显示累计净支出（正值=花钱，负值=盈利）
+                cumulative5Year = state.annualNetCost * 5;
+                cumulative10Year = state.annualNetCost * 10;
+                label5Key = '5 年累计净支出';
+                label10Key = '10 年累计净支出';
+            }
+            
+            // 更新标签
+            var label5El = document.querySelector('#cumulative5Row td');
+            var label10El = document.querySelector('#cumulative10Row td');
+            if (label5El && label10El) {
+                label5El.setAttribute('data-i18n', label5Key);
+                label10El.setAttribute('data-i18n', label10Key);
+                label5El.textContent = I18N[lang][label5Key] || label5Key;
+                label10El.textContent = I18N[lang][label10Key] || label10Key;
+            }
+            
+            document.getElementById('result5Year').textContent = formatCurrency(cumulative5Year);
+            document.getElementById('result10Year').textContent = formatCurrency(cumulative10Year);
+        }
+
+        // ===== 重置 =====
+        function resetCalculator() {
+            showStep(1);
+            document.getElementById('heatingDemand').value = '24';
+            document.getElementById('electricityPrice').value = '0.08';
+            document.getElementById('gasPrice').value = '0.12';
+            document.getElementById('biomassPrice').value = '0.08';
+            document.getElementById('copValue').value = '3.5';
+            document.getElementById('hasEquipmentSelect').value = 'no';
+            document.getElementById('equipmentTypeGroup').style.display = 'none';
+            document.getElementById('regionSelect').value = 'europe';
+            document.getElementById('seasonSelect').value = '12';
+            document.getElementById('dailyHoursSelect').value = '24';
+            document.getElementById('seasonCustomInput').classList.remove('show');
+            document.getElementById('dailyHoursCustomInput').classList.remove('show');
+            document.getElementById('tempTypeSelect').value = 'ec2';
+            document.getElementById('minerModelSelect').value = 's19xp';
+            document.getElementById('runModeSelect').value = 'continuous';
+            document.getElementById('heatingDemandError').textContent = '';
+            document.getElementById('electricityPriceError').textContent = '';
+            document.getElementById('heatingDemand').classList.remove('error');
+            document.getElementById('electricityPrice').classList.remove('error');
+            state.season = 12;
+            state.dailyHours = 24;
+            state.hasEquipment = 'no';
+            state.showComparison = true;
+        }
+    </script>
+</body>
+</html>

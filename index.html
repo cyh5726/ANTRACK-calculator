@@ -425,7 +425,7 @@
                     <label data-i18n="语言">语言</label>
                     <select id="languageSelect" onchange="switchLanguage()">
                         <option value="zh" data-i18n="中文">中文</option>
-                        <option value="en">English</option>
+                        <option value="en" selected>English</option>
                         <option value="de">Deutsch</option>
                     </select>
                 </div>
@@ -585,6 +585,7 @@
                 <label class="form-label" data-i18n="矿机型号">矿机型号</label>
                 <select class="form-select" id="minerModelSelect" onchange="calculateAntrackConfig()">
                     <option value="s19xp" data-i18n="S19 XP+ Hyd. (293TH/s, 19J/T)">S19 XP+ Hyd. (293TH/s, 19J/T)</option>
+                    <option value="s21e" data-i18n="S21e Hyd. (288TH/s, 17J/T)">S21e Hyd. (288TH/s, 17J/T)</option>
                     <option value="s21" data-i18n="S21+ Hyd. (358TH/s, 15J/T)">S21+ Hyd. (358TH/s, 15J/T)</option>
                 </select>
             </div>
@@ -595,6 +596,7 @@
                     <option value="heating" data-i18n="供热时运行">供热时运行</option>
                     <option value="continuous" data-i18n="持续运行 (24/7)">持续运行 (24/7)</option>
                 </select>
+                <div class="runtime-info" id="runtimeInfo" style="margin-top:8px;padding:10px;background:rgba(0,102,255,0.08);border-radius:6px;font-size:13px;color:#a0b4d0;"></div>
             </div>
 
             <div class="result-table">
@@ -762,7 +764,7 @@
         </div>
 
         <div class="footer">
-            <p data-i18n="ANTRACK 收益计算器 footer">ANTRACK 收益计算器 | REQ-008 | v2.5.8</p>
+            <p data-i18n="ANTRACK 收益计算器 footer">ANTRACK 收益计算器 | REQ-008 | v2.6.1</p>
         </div>
     </div>
 
@@ -777,12 +779,14 @@
         // 矿机参数
         const MINERS = {
             s19xp: { name: 'S19 XP+ Hyd.', hashrate: 293, efficiency: 19, pricePerT: 3 },
+            s21e: { name: 'S21e Hyd.', hashrate: 288, efficiency: 17, pricePerT: 6 },
             s21: { name: 'S21+ Hyd.', hashrate: 358, efficiency: 15, pricePerT: 8 }
         };
 
         // ANTRACK 价格（根据矿机）
         const PRICING = {
             s19xp: { ec2: 2688, ec4: 8288 },
+            s21e: { ec2: 2888, ec4: 8888 },
             s21: { ec2: 2888, ec4: 8888 }
         };
 
@@ -801,12 +805,28 @@
         // 天然气热值 (kWh/m³)
         const GAS_HEAT_VALUE = 10;
 
-        // 对比供热方式
+        // 对比供热方式（各地区设备投资单价 $/kW + 效率）
         const HEATING_METHODS = {
-            gas: { name: { zh: '燃气锅炉', en: 'Gas Boiler', de: 'Gasheizung' }, investMult: 0.8 },
-            heatpump: { name: { zh: '热泵', en: 'Heat Pump', de: 'Wärmepumpe' }, investMult: 1.2 },
-            electric: { name: { zh: '电锅炉', en: 'Electric Boiler', de: 'Elektrokessel' }, investMult: 0.6 },
-            biomass: { name: { zh: '生物质锅炉', en: 'Biomass Boiler', de: 'Biomassekessel' }, investMult: 1.0 }
+            gas: {
+                name: { zh: '燃气锅炉', en: 'Gas Boiler', de: 'Gasheizung' },
+                investPerKw: { europe: 250, us: 200, canada: 250, australia: 250, centralasia: 80 },
+                efficiency: 0.90
+            },
+            heatpump: {
+                name: { zh: '热泵', en: 'Heat Pump', de: 'Wärmepumpe' },
+                investPerKw: { europe: 500, us: 400, canada: 450, australia: 450, centralasia: 350 },
+                efficiency: null  // 使用地区 COP 值
+            },
+            electric: {
+                name: { zh: '电锅炉', en: 'Electric Boiler', de: 'Elektrokessel' },
+                investPerKw: { europe: 150, us: 120, canada: 150, australia: 150, centralasia: 50 },
+                efficiency: 0.98
+            },
+            biomass: {
+                name: { zh: '生物质锅炉', en: 'Biomass Boiler', de: 'Biomassekessel' },
+                investPerKw: { europe: 350, us: 300, canada: 350, australia: 350, centralasia: 120 },
+                efficiency: 0.75
+            }
         };
         
         // 多语言文本
@@ -839,6 +859,7 @@
                 '持续运行（24 小时）': '持续运行（24 小时）',
                 '50℃以下 V2-EC2-DT': '50℃以下 V2-EC2-DT',
                 '50-80℃ V2-EC4-DTHP': '50-80℃ V2-EC4-DTHP',
+                'S21e Hyd. (288TH/s)': 'S21e Hyd. (288TH/s)',
                 'S19 XP+ Hyd. (293TH/s)': 'S19 XP+ Hyd. (293TH/s)',
                 'S21+ Hyd. (358TH/s)': 'S21+ Hyd. (358TH/s)',
                 '地区与能源价格': '地区与能源价格',
@@ -915,7 +936,7 @@
                 '语言': '语言',
                 '货币': '货币',
                 '步骤 4: 收益结果': '步骤 4: 收益结果',
-                'ANTRACK 收益计算器 footer': 'ANTRACK 收益计算器 | REQ-008 | v2.5.8',
+                'ANTRACK 收益计算器 footer': 'ANTRACK 收益计算器 | REQ-008 | v2.6.1',
                 '小时': '小时',
                 '盈利': '盈利',
                 '请输入有效的供热需求': '请输入有效的供热需求',
@@ -937,6 +958,7 @@
                 '请选择现有供暖设备类型': '请选择现有供暖设备类型',
                 '持续运行 (24/7)': '持续运行 (24/7)',
                 '供热时运行': '供热时运行',
+                'S21e Hyd. (288TH/s, 17J/T)': 'S21e Hyd. (288TH/s, 17J/T)',
                 'S21+ Hyd. (358TH/s, 15J/T)': 'S21+ Hyd. (358TH/s, 15J/T)',
                 'S19 XP+ Hyd. (293TH/s, 19J/T)': 'S19 XP+ Hyd. (293TH/s, 19J/T)',
                 '50-80℃ (V2-EC4-DTHP)': '50-80℃ (V2-EC4-DTHP)',
@@ -1046,7 +1068,7 @@
                 '语言': 'Language',
                 '货币': 'Currency',
                 '步骤 4: 收益结果': 'Step 4: Results',
-                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Calculator | REQ-008 | v2.5.8',
+                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Calculator | REQ-008 | v2.6.1',
                 '小时': '小时',
                 '24 小时': '24 Stunden',
                 'hours': 'hours',
@@ -1073,6 +1095,7 @@
                 '请选择现有供暖设备类型': 'Please select heating equipment type',
                 '持续运行 (24/7)': 'Continuous (24/7)',
                 '供热时运行': 'Run During Heating',
+                'S21e Hyd. (288TH/s, 17J/T)': 'S21e Hyd. (288TH/s, 17J/T)',
                 'S21+ Hyd. (358TH/s, 15J/T)': 'S21+ Hyd. (358TH/s, 15J/T)',
                 'S19 XP+ Hyd. (293TH/s, 19J/T)': 'S19 XP+ Hyd. (293TH/s, 19J/T)',
                 '50-80℃ (V2-EC4-DTHP)': '50-80℃ (V2-EC4-DTHP)',
@@ -1182,7 +1205,7 @@
                 '语言': 'Sprache',
                 '货币': 'Währung',
                 '步骤 4: 收益结果': 'Schritt 4: Ergebnisse',
-                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Rechner | REQ-008 | v2.5.8',
+                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Rechner | REQ-008 | v2.6.1',
                 '小时': 'Stunden',
                 '盈利': 'Gewinn',
                 '请输入有效的供热需求': 'Gültigen Heizbedarf eingeben',
@@ -1206,6 +1229,7 @@
                 '50℃ 以下 (V2-EC2-DT)': 'Unter 50℃ (V2-EC2-DT)',
                 'S19 XP+ Hyd. (293TH/s, 19J/T)': 'S19 XP+ Hyd. (293TH/s, 19J/T)',
                 '50-80℃ (V2-EC4-DTHP)': '50-80℃ (V2-EC4-DTHP)',
+                'S21e Hyd. (288TH/s, 17J/T)': 'S21e Hyd. (288TH/s, 17J/T)',
                 'S21+ Hyd. (358TH/s, 15J/T)': 'S21+ Hyd. (358TH/s, 15J/T)',
                 '收益计算': 'Rendite berechnen',
                 'ANTRACK 配置': 'ANTRACK Konfiguration',
@@ -1220,7 +1244,7 @@
             heatingDemand: 24, hasEquipment: 'no', equipmentType: 'gas', 
             electricityPrice: 0.08, gasPrice: 0.12, biomassPrice: 0.08, copValue: 3.5,
             region: 'europe', season: 12, dailyHours: 24, 
-            tempType: 'ec2', minerModel: 's19xp', runMode: 'continuous', showComparison: true,
+            tempType: 'ec2', minerModel: 's19xp', runMode: 'heating', showComparison: true,
             btcPrice: 80000, networkHashrate: 1000, 
             sets: 0, singleSetPower: 0, totalInvestment: 0,
             deviceCost: 0, minerCost: 0,
@@ -1231,11 +1255,14 @@
 
         // ===== 初始化 =====
         window.onload = function() {
-            console.log('ANTRACK Calculator v2.5.8 loaded');
+            console.log('ANTRACK Calculator v2.6.1 loaded');
+            switchLanguage();
         };
 
         // ===== 语言切换 =====
         function switchLanguage() {
+            var lang = document.getElementById('languageSelect').value;
+            
             // Update placeholders
             document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
                 var key = el.getAttribute('data-i18n-placeholder');
@@ -1243,8 +1270,6 @@
                     el.placeholder = I18N[lang][key];
                 }
             });
-
-            var lang = document.getElementById('languageSelect').value;
             
             // 更新所有带 data-i18n 属性的元素
             document.querySelectorAll('[data-i18n]').forEach(function(el) {
@@ -1292,13 +1317,11 @@
             }
             
             try {
-                // 从 Blockchain.info 获取全网算力
-                const res = await fetch('https://blockchain.info/q/hashrate');
-                const hashrate = await res.text();
-                if (hashrate && !isNaN(hashrate)) {
-                    // 更新 state
-                    state.networkHashrate = parseFloat(hashrate) / 1e18;
-                    // 同时更新显示
+                // 从 mempool.space 获取全网算力
+                const res = await fetch('https://mempool.space/api/v1/mining/hashrate/1d');
+                const hashData = await res.json();
+                if (hashData && hashData.currentHashrate) {
+                    state.networkHashrate = hashData.currentHashrate / 1e18;
                     document.getElementById('networkHashrateInput').value = state.networkHashrate.toFixed(2);
                 }
             } catch (e) {
@@ -1571,6 +1594,21 @@
             state.totalInvestment = totalInvestment;
             state.deviceCost = unitPrice * sets;
             state.minerCost = minerTotalCost * sets;
+            
+            // 展示年度运行时间
+            var runtimeEl = document.getElementById('runtimeInfo');
+            if (runtimeEl) {
+                var lang = document.getElementById('languageSelect').value;
+                var monthLabel = (lang === 'zh' ? '个月' : (lang === 'de' ? ' Monate' : ' months'));
+                var daysLabel = (lang === 'zh' ? '天' : (lang === 'de' ? ' Tage' : ' days'));
+                var hLabel = (lang === 'zh' ? '小时/年' : (lang === 'de' ? ' Std./J' : ' h/yr'));
+                if (state.runMode === 'continuous') {
+                    runtimeEl.textContent = (lang === 'zh' ? '全年 8760 小时持续运行' : (lang === 'de' ? 'Ganzjährig 8760 Std. Dauerbetrieb' : '8,760 h/yr continuous operation'));
+                } else {
+                    runtimeEl.textContent = state.season + monthLabel + ' × 30' + daysLabel + ' × ' + state.dailyHours + 'h = ' + (state.season * 30 * state.dailyHours) + hLabel;
+                }
+                runtimeEl.style.display = 'block';
+            }
         }
 
         // ===== 计算投资收益 =====
@@ -1605,14 +1643,11 @@
                     // 热泵：年度成本 = 年供热需求 ÷ COP ÷ 电价
                     previousAnnualCost = (annualEnergy / state.copValue) * state.electricityPrice;
                 } else if (state.equipmentType === 'gas') {
-                    // 燃气锅炉：年度成本 = 年供热需求 ÷ 效率 ÷ 热值 × 燃气价格
-                    previousAnnualCost = (annualEnergy / 0.92 / GAS_HEAT_VALUE) * state.gasPrice;
+                    previousAnnualCost = (annualEnergy / method.efficiency / GAS_HEAT_VALUE) * state.gasPrice;
                 } else if (state.equipmentType === 'biomass') {
-                    // 生物质：年度成本 = 年供热需求 ÷ 效率 × 生物质价格
-                    previousAnnualCost = (annualEnergy / 0.85) * state.biomassPrice;
+                    previousAnnualCost = (annualEnergy / method.efficiency) * state.biomassPrice;
                 } else if (state.equipmentType === 'electric') {
-                    // 电锅炉：年度成本 = 年供热需求 ÷ 效率 × 电价
-                    previousAnnualCost = (annualEnergy / 0.98) * state.electricityPrice;
+                    previousAnnualCost = (annualEnergy / method.efficiency) * state.electricityPrice;
                 }
             }
             
@@ -1661,24 +1696,29 @@
             var annualEnergy = state.annualHours * state.heatingDemand;
             var rows = [];
             var lang = document.getElementById('languageSelect').value;
+            var region = state.region;
+            var hasEquipment = document.getElementById('hasEquipmentSelect').value;
             
             // 计算 ANTRACK 5 年总成本
             var antrackFiveYear = baseInvest + state.annualNetCost * 5;
             
-            Object.keys(HEATING_METHODS).forEach(function(key) {
+            // 已有设备场景：只对比用户设备 vs ANTRACK
+            var compareKeys = (hasEquipment === 'yes') ? [state.equipmentType] : Object.keys(HEATING_METHODS);
+            
+            compareKeys.forEach(function(key) {
                 var method = HEATING_METHODS[key];
-                var invest = baseInvest * method.investMult;
+                var invest = (method.investPerKw[region] || method.investPerKw.europe) * state.heatingDemand;
                 
-                // 计算各供热方式的年度成本（正确的计算方式）
+                // 计算各供热方式的年度成本
                 var annualCost;
                 if (key === 'heatpump') {
                     annualCost = (annualEnergy / state.copValue) * state.electricityPrice;
                 } else if (key === 'gas') {
-                    annualCost = (annualEnergy / 0.92 / GAS_HEAT_VALUE) * state.gasPrice;
+                    annualCost = (annualEnergy / method.efficiency / GAS_HEAT_VALUE) * state.gasPrice;
                 } else if (key === 'biomass') {
-                    annualCost = (annualEnergy / 0.85) * state.biomassPrice;
+                    annualCost = (annualEnergy / method.efficiency) * state.biomassPrice;
                 } else if (key === 'electric') {
-                    annualCost = (annualEnergy / 0.98) * state.electricityPrice;
+                    annualCost = (annualEnergy / method.efficiency) * state.electricityPrice;
                 }
                 
                 var fiveYearCost = invest + annualCost * 5;
@@ -1694,8 +1734,6 @@
             });
             
             // 添加 ANTRACK 行
-                        // 获取当前语言
-            var lang = document.getElementById('languageSelect').value;
             var antrackName = I18N[lang] && I18N[lang]['ANTRACK 热回收'] ? I18N[lang]['ANTRACK 热回收'] : 'ANTRACK 热回收';
             
             rows.push({ 
@@ -1705,16 +1743,22 @@
                 annualCost: state.annualNetCost, 
                 fiveYearCost: antrackFiveYear, 
                 savings: 0, 
-                isBest: true 
+                isBest: false  // 由排序后动态判断
             });
 
             // 按 5 年总成本排序
             rows.sort(function(a, b) { return a.fiveYearCost - b.fiveYearCost; });
             
-            // 找到最大值用于进度条
+            // 动态标记最优：5 年总成本最低的为最优方案
+            rows.forEach(function(r, i) { r.isBest = (i === 0); });
+            
+            // 找到最大值和最小值用于进度条和 savings
             var maxCost = Math.max.apply(null, rows.map(function(r) { return r.fiveYearCost; }));
             var minCost = Math.min.apply(null, rows.map(function(r) { return r.fiveYearCost; }));
             var costRange = maxCost - minCost || 1;
+            
+            // 重新计算 savings：相对于最优方案
+            rows.forEach(function(r) { r.savings = r.fiveYearCost - minCost; });
             
             var container = document.getElementById('comparisonBody');
             var html = '';

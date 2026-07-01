@@ -511,7 +511,7 @@
                     </div>
 
                     <div class="form-group" id="gasPriceGroup" style="display: none;">
-                        <label class="form-label" data-i18n="燃气价格">燃气价格 <span class="gas-unit">($/m³)</span></label>
+                        <label class="form-label" data-i18n="燃气价格">燃气价格 <span class="gas-unit">($/kWh)</span></label>
                         <input type="number" class="form-input" id="gasPrice" step="0.01" value="0.12" min="0" oninput="handlePriceChange()">
                     </div>
 
@@ -764,7 +764,7 @@
         </div>
 
         <div class="footer">
-            <p data-i18n="ANTRACK 收益计算器 footer">ANTRACK 收益计算器 | REQ-008 | v2.6.1</p>
+            <p data-i18n="ANTRACK 收益计算器 footer">ANTRACK 收益计算器 | REQ-008 | v2.8.1</p>
         </div>
     </div>
 
@@ -773,7 +773,7 @@
         const EXCHANGE_RATES = { USD: 1.0, EUR: 0.92, GBP: 0.79, CAD: 1.36 };
         const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£', CAD: 'C$' };
         const CURRENCY_LABELS = { USD: '($/kWh)', EUR: '(€/kWh)', GBP: '(£/kWh)', CAD: '(C$/kWh)' };
-        const GAS_LABELS = { USD: '($/m³)', EUR: '(€/m³)', GBP: '(£/m³)', CAD: '(C$/m³)' };
+        const GAS_LABELS = { USD: '($/kWh)', EUR: '(€/kWh)', GBP: '(£/kWh)', CAD: '(C$/kWh)' };
         const BIOMASS_LABELS = { USD: '($/kWh)', EUR: '(€/kWh)', GBP: '(£/kWh)', CAD: '(C$/kWh)' };
 
         // 矿机参数
@@ -793,38 +793,48 @@
         // 运输安装费
         const TRANSPORT = 1000, INSTALLATION = 500;
 
-        // 地区默认能源价格
-        const REGION_DEFAULTS = {
-            europe: { electricity: 0.08, gas: 0.12, biomass: 0.08, cop: 3.5 },
-            canada: { electricity: 0.10, gas: 1.2, biomass: 0.15, cop: 3.2 },
-            usa: { electricity: 0.08, gas: 1.0, biomass: 0.08, cop: 3.5 },
-            australia: { electricity: 0.15, gas: 1.5, biomass: 0.12, cop: 3.0 },
-            centralasia: { electricity: 0.06, gas: 0.5, biomass: 0.05, cop: 3.5 }
-        };
+        // ANTRACK EC4 热泵 COP 常量
+        const HEATPUMP_COP = 3.5;
 
-        // 天然气热值 (kWh/m³)
-        const GAS_HEAT_VALUE = 10;
+        // 对比用高温热泵 COP（独立空气源热泵 80°C 出水）
+        // EC4(80°C) 对比场景：标准热泵无法产出 80°C，需用高温热泵 COP
+        const COMPARISON_HP_COP_HIGH_TEMP = 2.5;
+
+        // 矿机标称功率（台数估算）
+        const NOMINAL_MINER_POWER = 6.0;    // kW/台
+
+        // 每月天数（与 continuous 模式 365.25 天对齐）
+        const DAYS_PER_MONTH = 365.25 / 12;  // ≈30.44
+
+        // 地区默认能源价格（燃气价单位：$/kWh）
+        const REGION_DEFAULTS = {
+            europe: { electricity: 0.08, gas: 0.07, biomass: 0.08, cop: 3.0 },
+            canada: { electricity: 0.10, gas: 0.05, biomass: 0.15, cop: 2.8 },
+            usa: { electricity: 0.08, gas: 0.05, biomass: 0.08, cop: 3.0 },
+            australia: { electricity: 0.15, gas: 0.07, biomass: 0.12, cop: 2.8 },
+            centralasia: { electricity: 0.06, gas: 0.03, biomass: 0.05, cop: 3.0 }
+        };
 
         // 对比供热方式（各地区设备投资单价 $/kW + 效率）
         const HEATING_METHODS = {
             gas: {
                 name: { zh: '燃气锅炉', en: 'Gas Boiler', de: 'Gasheizung' },
-                investPerKw: { europe: 250, us: 200, canada: 250, australia: 250, centralasia: 80 },
+                investPerKw: { europe: 250, usa: 200, canada: 250, australia: 250, centralasia: 80 },
                 efficiency: 0.90
             },
             heatpump: {
                 name: { zh: '热泵', en: 'Heat Pump', de: 'Wärmepumpe' },
-                investPerKw: { europe: 500, us: 400, canada: 450, australia: 450, centralasia: 350 },
+                investPerKw: { europe: 900, usa: 650, canada: 700, australia: 700, centralasia: 400 },
                 efficiency: null  // 使用地区 COP 值
             },
             electric: {
                 name: { zh: '电锅炉', en: 'Electric Boiler', de: 'Elektrokessel' },
-                investPerKw: { europe: 150, us: 120, canada: 150, australia: 150, centralasia: 50 },
+                investPerKw: { europe: 150, usa: 120, canada: 150, australia: 150, centralasia: 50 },
                 efficiency: 0.98
             },
             biomass: {
                 name: { zh: '生物质锅炉', en: 'Biomass Boiler', de: 'Biomassekessel' },
-                investPerKw: { europe: 350, us: 300, canada: 350, australia: 350, centralasia: 120 },
+                investPerKw: { europe: 450, usa: 400, canada: 450, australia: 450, centralasia: 150 },
                 efficiency: 0.75
             }
         };
@@ -918,6 +928,8 @@
                 '10年累计收益': '10年累计收益',
                 '5年累计净支出': '5年累计净支出',
                 '10年累计净支出': '10年累计净支出',
+                '5 年总成本': '5 年总成本',
+                '10 年总成本': '10 年总成本',
                 '相较于': '相较于',
                 '使用 ANTRACK 每年能节省': '使用 ANTRACK 每年能节省',
                 '投资回收期为': '投资回收期为',
@@ -925,8 +937,8 @@
                 '节省': '节省',
                 '每日净成本': '每日净成本',
                 '名词解释': '名词解释',
-                '每日运行成本公式': '= 供热需求(kW) × 每日运行时长(h) × 电价($/kWh)',
-                '每日 BTC 收益公式': '= (ANTRACK总算力 ÷ 全网算力) × 3.125 × 144 × BTC价格',
+                '每日运行成本公式': '= 实际总功率(kW) × 每日运行时数(h) × 电价($/kWh)',
+                '每日 BTC 收益公式': '= (ANTRACK总算力 ÷ 全网算力) × 3.125 × 144 × BTC价格 × (时数/24)',
                 '每日净成本公式': '= 每日运行成本 - 每日 BTC 收益',
                 '年度净成本公式': '= 年度电费 - 年度 BTC 收益（数值越小越好，负数表示盈利）',
                 '年度节省公式': '= 原设备年度成本 - ANTRACK 年度净成本（仅已有设备场景）',
@@ -936,7 +948,7 @@
                 '语言': '语言',
                 '货币': '货币',
                 '步骤 4: 收益结果': '步骤 4: 收益结果',
-                'ANTRACK 收益计算器 footer': 'ANTRACK 收益计算器 | REQ-008 | v2.6.1',
+                'ANTRACK 收益计算器 footer': 'ANTRACK 收益计算器 | REQ-008 | v2.8.1',
                 '小时': '小时',
                 '盈利': '盈利',
                 '请输入有效的供热需求': '请输入有效的供热需求',
@@ -1050,6 +1062,8 @@
                 '10年累计收益': '10-Year Cumulative',
                 '5年累计净支出': '5-Year Net Expense',
                 '10年累计净支出': '10-Year Net Expense',
+                '5 年总成本': '5-Year Total Cost',
+                '10 年总成本': '10-Year Total Cost',
                 '相较于': 'Compared to',
                 '使用 ANTRACK 每年能节省': 'Using ANTRACK saves',
                 '投资回收期为': 'Payback period is',
@@ -1057,8 +1071,8 @@
                 'saving': 'saving',
                 '每日净成本': 'Daily Net Cost',
                 '名词解释': 'Glossary',
-                '每日运行成本公式': '= Heating Demand (kW) × Daily Hours × Electricity Price ($/kWh)',
-                '每日 BTC 收益公式': '= (ANTRACK Total Hashrate ÷ Network Hashrate) × 3.125 × 144 × BTC Price',
+                '每日运行成本公式': '= Actual Total Power (kW) × Daily Hours × Electricity Price ($/kWh)',
+                '每日 BTC 收益公式': '= (ANTRACK Total Hashrate ÷ Network Hashrate) × 3.125 × 144 × BTC Price × (hours/24)',
                 '每日净成本公式': '= Daily Operating Cost - Daily BTC Revenue',
                 '年度净成本公式': '= Annual Electricity Cost - Annual BTC Revenue (lower is better, negative means profit)',
                 '年度节省公式': '= Original Equipment Annual Cost - ANTRACK Annual Net Cost (existing equipment only)',
@@ -1068,7 +1082,7 @@
                 '语言': 'Language',
                 '货币': 'Currency',
                 '步骤 4: 收益结果': 'Step 4: Results',
-                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Calculator | REQ-008 | v2.6.1',
+                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Calculator | REQ-008 | v2.8.1',
                 '小时': '小时',
                 '24 小时': '24 Stunden',
                 'hours': 'hours',
@@ -1187,6 +1201,8 @@
                 '10年累计收益': '10-Jahres-Kumuliert',
                 '5年累计净支出': '5-Jahres-Nettoausgaben',
                 '10年累计净支出': '10-Jahres-Nettoausgaben',
+                '5 年总成本': '5-Jahres-Gesamtkosten',
+                '10 年总成本': '10-Jahres-Gesamtkosten',
                 '相较于': 'Im Vergleich zu',
                 '使用 ANTRACK 每年能节省': 'ANTRACK spart jährlich',
                 '投资回收期为': 'Amortisation beträgt',
@@ -1194,7 +1210,7 @@
                 'sparen': 'sparen',
                 '每日净成本': 'Tägliche Nettokosten',
                 '名词解释': 'Begriffsdefinitionen',
-                '每日运行成本公式': '= Heizbedarf (kW) × Tägliche Stunden × Strompreis ($/kWh)',
+                '每日运行成本公式': '= Tatsächliche Gesamtleistung (kW) × Tägliche Stunden × Strompreis ($/kWh)',
                 '每日 BTC 收益公式': '= (ANTRACK Gesamthashrate ÷ Netzwerk-Hashrate) × 3.125 × 144 × BTC Preis',
                 '每日净成本公式': '= Tägliche Betriebskosten - Tägliche BTC-Einnahmen',
                 '年度净成本公式': '= Jährliche Stromkosten - Jährliche BTC-Einnahmen (kleiner ist besser, negativ bedeutet Gewinn)',
@@ -1205,7 +1221,7 @@
                 '语言': 'Sprache',
                 '货币': 'Währung',
                 '步骤 4: 收益结果': 'Schritt 4: Ergebnisse',
-                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Rechner | REQ-008 | v2.6.1',
+                'ANTRACK 收益计算器 footer': 'ANTRACK ROI Rechner | REQ-008 | v2.8.1',
                 '小时': 'Stunden',
                 '盈利': 'Gewinn',
                 '请输入有效的供热需求': 'Gültigen Heizbedarf eingeben',
@@ -1240,22 +1256,24 @@
             }
         };
         
-        let state = { 
-            heatingDemand: 24, hasEquipment: 'no', equipmentType: 'gas', 
-            electricityPrice: 0.08, gasPrice: 0.12, biomassPrice: 0.08, copValue: 3.5,
-            region: 'europe', season: 12, dailyHours: 24, 
+        let state = {
+            heatingDemand: 24, hasEquipment: 'no', equipmentType: 'gas',
+            electricityPrice: 0.08, gasPrice: 0.07, biomassPrice: 0.08, copValue: 3.5,
+            region: 'europe', season: 12, dailyHours: 24,
             tempType: 'ec2', minerModel: 's19xp', runMode: 'heating', showComparison: true,
-            btcPrice: 80000, networkHashrate: 1000, 
-            sets: 0, singleSetPower: 0, totalInvestment: 0,
-            deviceCost: 0, minerCost: 0,
-            annualElectricity: 0, annualBTCRevenue: 0, 
+            btcPrice: 80000, networkHashrate: 1000,
+            antrackUnits: 0, totalMiners: 0, singleSetPower: 0, totalInvestment: 0,
+            totalOperatingPower: 0, nominalHeatingCapacity: 0,
+            deviceCost: 0, minerCost: 0, singleMinerPower: 0,
+            annualElectricity: 0, annualBTCRevenue: 0, annualNetCost: 0,
             previousAnnualCost: 0, annualSavings: 0, payback: 0,
-            dailyOperatingCost: 0, dailyBTCRevenue: 0
+            dailyOperatingCost: 0, dailyBTCRevenue: 0, dailyNetCost: 0,
+            annualHours: 0, operatingDays: 0
         };
 
         // ===== 初始化 =====
         window.onload = function() {
-            console.log('ANTRACK Calculator v2.6.1 loaded');
+            console.log('ANTRACK Calculator v2.8.1 loaded');
             switchLanguage();
         };
 
@@ -1358,7 +1376,7 @@
         // ===== 价格变化处理 =====
         function handlePriceChange() {
             state.electricityPrice = parseFloat(document.getElementById('electricityPrice').value) || 0.08;
-            state.gasPrice = parseFloat(document.getElementById('gasPrice').value) || 0.12;
+            state.gasPrice = parseFloat(document.getElementById('gasPrice').value) || 0.07;
             state.biomassPrice = parseFloat(document.getElementById('biomassPrice').value) || 0.08;
             state.copValue = parseFloat(document.getElementById('copValue').value) || 3.5;
             
@@ -1567,34 +1585,56 @@
             }
         }
 
-        // ===== 计算 ANTRACK 配置 =====
+        // ===== 计算 ANTRACK 配置（v2.8.1: 按矿机标称功率估算） =====
         function calculateAntrackConfig() {
             state.tempType = document.getElementById('tempTypeSelect').value;
             state.minerModel = document.getElementById('minerModelSelect').value;
             state.runMode = document.getElementById('runModeSelect').value;
-            
+
             var miner = MINERS[state.minerModel];
-            var singleMinerPower = miner.hashrate * miner.efficiency / 1000;
-            var singleSetHeatingPower = state.tempType === 'ec2' ? singleMinerPower * 4 : singleMinerPower * 4 + 8;
+
+            // 真实矿机功率（成本计算用）
+            var realMinerPower = miner.hashrate * miner.efficiency / 1000;
+            state.singleMinerPower = realMinerPower;
+
+            // ---- 台数：标称 6kW/台估算 ----
+            var copFactor = HEATPUMP_COP / (HEATPUMP_COP - 1);  // 3.5/2.5 = 1.4
+            var nominalMinerHeating = state.tempType === 'ec2' ? NOMINAL_MINER_POWER : NOMINAL_MINER_POWER * copFactor;
+            var totalMiners = Math.max(1, Math.ceil(state.heatingDemand / nominalMinerHeating));
+            var antrackUnits = Math.ceil(totalMiners / 4);
+            var nominalHeating = totalMiners * nominalMinerHeating;
+
+            // ---- 实际运行功率：真实矿机参数 ----
+            var realMinerHeating = state.tempType === 'ec2' ? realMinerPower : realMinerPower * copFactor;
+            var totalOperatingPower = realMinerHeating * totalMiners;
+            var totalMinerPower = realMinerPower * totalMiners;
+
+            // ---- 满载单套功率（兼容显示） ----
+            var fullSetHeating = state.tempType === 'ec2' ? realMinerPower * 4 : realMinerPower * 4 * copFactor;
+
+            // ---- 投资 ----
             var unitPrice = PRICING[state.minerModel][state.tempType];
-            
-            var sets = Math.max(1, Math.floor(state.heatingDemand / singleSetHeatingPower));
-            if (state.heatingDemand - sets * singleSetHeatingPower >= singleMinerPower) sets++;
-            
-            var minerTotalCost = miner.hashrate * miner.pricePerT * 4;
-            var totalInvestment = (unitPrice + minerTotalCost + TRANSPORT + INSTALLATION) * sets;
-            
-            document.getElementById('singleSetHeatingPower').textContent = singleSetHeatingPower.toFixed(2) + ' kW';
-            document.getElementById('totalMinerPower').textContent = (singleMinerPower * 4 * sets).toFixed(2) + ' kW';
-            document.getElementById('antrackSets').textContent = sets;
+            var unitMinerCost = miner.hashrate * miner.pricePerT;
+            var deviceCost = unitPrice * antrackUnits;
+            var minerCost = unitMinerCost * totalMiners;
+            var totalInvestment = deviceCost + minerCost + TRANSPORT * antrackUnits + INSTALLATION * antrackUnits;
+
+            // ---- 更新显示 ----
+            document.getElementById('singleSetHeatingPower').textContent = nominalMinerHeating.toFixed(1) + ' kW (标称)';
+            document.getElementById('totalMinerPower').textContent = totalOperatingPower.toFixed(2) + ' kW (实际)';
+            document.getElementById('antrackSets').textContent = antrackUnits + ' 台 / ' + totalMiners + ' 矿机';
             document.getElementById('totalInvestment').textContent = formatCurrency(totalInvestment);
-            
-            state.sets = sets;
-            state.singleSetPower = singleSetHeatingPower;
+
+            // 存储
+            state.antrackUnits = antrackUnits;
+            state.totalMiners = totalMiners;
+            state.singleSetPower = fullSetHeating;
+            state.totalOperatingPower = totalOperatingPower;
+            state.nominalHeatingCapacity = nominalHeating;
             state.totalInvestment = totalInvestment;
-            state.deviceCost = unitPrice * sets;
-            state.minerCost = minerTotalCost * sets;
-            
+            state.deviceCost = deviceCost;
+            state.minerCost = minerCost;
+
             // 展示年度运行时间
             var runtimeEl = document.getElementById('runtimeInfo');
             if (runtimeEl) {
@@ -1605,72 +1645,68 @@
                 if (state.runMode === 'continuous') {
                     runtimeEl.textContent = (lang === 'zh' ? '全年 8760 小时持续运行' : (lang === 'de' ? 'Ganzjährig 8760 Std. Dauerbetrieb' : '8,760 h/yr continuous operation'));
                 } else {
-                    runtimeEl.textContent = state.season + monthLabel + ' × 30' + daysLabel + ' × ' + state.dailyHours + 'h = ' + (state.season * 30 * state.dailyHours) + hLabel;
+                    var daysPerMonth = DAYS_PER_MONTH.toFixed(1);
+                    runtimeEl.textContent = state.season + monthLabel + ' × ' + daysPerMonth + daysLabel + ' × ' + state.dailyHours + 'h = ' + Math.round(state.season * DAYS_PER_MONTH * state.dailyHours) + hLabel;
                 }
                 runtimeEl.style.display = 'block';
             }
         }
 
-        // ===== 计算投资收益 =====
+        // ===== 计算投资收益（v2.8.1: 实际功率 + 统一时间基准） =====
         function calculateInvestment() {
-            var annualHours = state.runMode === 'continuous' ? 8760 : state.season * 30 * state.dailyHours;
-            var totalPower = state.singleSetPower * state.sets;
-            var annualElectricity = annualHours * totalPower * state.electricityPrice;
-            // 每日运行时长
-            var dailyHeatingHours = (state.runMode === 'continuous') ? 24 : state.dailyHours;
-            // 每日供热需求 (kWh)
-            var dailyEnergy = state.heatingDemand * dailyHeatingHours;
-            // 每日运行成本 = 每日供热需求 × 电价
-            var dailyOperatingCost = dailyEnergy * state.electricityPrice;
-            
+            var annualHours = state.runMode === 'continuous' ? 8760 : state.season * DAYS_PER_MONTH * state.dailyHours;
+            var dailyHeatingHours = state.runMode === 'continuous' ? 24 : state.dailyHours;
+            var operatingDays = state.runMode === 'continuous' ? 365 : (annualHours / dailyHeatingHours);
+
+            // 电费：基于实际运行功率
+            var annualElectricity = annualHours * state.totalOperatingPower * state.electricityPrice;
+            var dailyOperatingCost = state.totalOperatingPower * dailyHeatingHours * state.electricityPrice;
+
+            // BTC 收益
             var miner = MINERS[state.minerModel];
-            var totalHashrate = miner.hashrate * 4 * state.sets * 1000;
-            var dailyBTC = (totalHashrate / (state.networkHashrate * 1e9)) * 3.125 * 144;
-            state.dailyBTCRevenue = dailyBTC * state.btcPrice;
-            var operatingDays = state.runMode === 'continuous' ? 365 : (annualHours / 24);
-            state.annualBTCRevenue = state.dailyBTCRevenue * operatingDays;
-            
-            // ANTRACK 年度净成本 = 电费 - BTC 收益
-            var annualNetCost = annualElectricity - state.annualBTCRevenue;
-            
-            // 计算原设备年度成本（正确的计算方式）
+            var totalHashrate = miner.hashrate * state.totalMiners * 1000;
+            var dailyBTC24h = (totalHashrate / (state.networkHashrate * 1e9)) * 3.125 * 144;
+            var dailyBTCRevenue = dailyBTC24h * state.btcPrice * (dailyHeatingHours / 24);
+            var annualBTCRevenue = dailyBTCRevenue * operatingDays;
+
+            // 净成本
+            var annualNetCost = annualElectricity - annualBTCRevenue;
+            var dailyNetCost = dailyOperatingCost - dailyBTCRevenue;
+
+            // 原设备年度成本（对比基准对齐 ANTRACK 实际总供热功率）
             var method = HEATING_METHODS[state.equipmentType];
-            var annualEnergy = annualHours * state.heatingDemand;
+            var annualEnergy = annualHours * state.totalOperatingPower;
             var previousAnnualCost = 0;
-            
+
             if (state.hasEquipment === 'yes') {
                 if (state.equipmentType === 'heatpump') {
-                    // 热泵：年度成本 = 年供热需求 ÷ COP ÷ 电价
-                    previousAnnualCost = (annualEnergy / state.copValue) * state.electricityPrice;
+                    // EC4(80°C) 场景：现有热泵需高温热泵 COP
+                    var effectiveCop = state.tempType === 'ec4' ? COMPARISON_HP_COP_HIGH_TEMP : state.copValue;
+                    previousAnnualCost = (annualEnergy / effectiveCop) * state.electricityPrice;
                 } else if (state.equipmentType === 'gas') {
-                    previousAnnualCost = (annualEnergy / method.efficiency / GAS_HEAT_VALUE) * state.gasPrice;
+                    previousAnnualCost = (annualEnergy / method.efficiency) * state.gasPrice;
                 } else if (state.equipmentType === 'biomass') {
                     previousAnnualCost = (annualEnergy / method.efficiency) * state.biomassPrice;
                 } else if (state.equipmentType === 'electric') {
                     previousAnnualCost = (annualEnergy / method.efficiency) * state.electricityPrice;
                 }
             }
-            
-            // 年度节省 = 原设备成本 - ANTRACK 净成本
+
             var annualSavings = previousAnnualCost - annualNetCost;
-            
-            // 投资回收期 = 总投资 / 年度节省
             var payback = annualSavings > 0 ? state.totalInvestment / annualSavings : 999;
-            
-            document.getElementById('annualHours').textContent = annualHours.toLocaleString() + ' ' + (document.getElementById('languageSelect').value === 'zh' ? '小时' : 'hours');
+
+            // ---- 显示 ----
+            var lang = document.getElementById('languageSelect').value;
+            document.getElementById('annualHours').textContent = annualHours.toLocaleString() + ' ' + (lang === 'zh' ? '小时' : 'hours');
             document.getElementById('annualElectricityCost').textContent = formatCurrency(annualElectricity);
             document.getElementById('dailyOperatingCost').textContent = formatCurrency(dailyOperatingCost);
-            document.getElementById('dailyBTCRevenue').textContent = formatCurrency(state.dailyBTCRevenue);
-            // 每日净成本
-            var dailyNetCost = dailyOperatingCost - state.dailyBTCRevenue;
+            document.getElementById('dailyBTCRevenue').textContent = formatCurrency(dailyBTCRevenue);
+
             var dailyNetCostEl = document.getElementById('dailyNetCost');
             dailyNetCostEl.textContent = formatCurrency(dailyNetCost);
-            if (dailyNetCost < 0) {
-                dailyNetCostEl.style.color = 'var(--success-color)';
-            } else {
-                dailyNetCostEl.style.color = 'var(--text-primary)';
-            }
-            document.getElementById('annualBTCRevenue').textContent = formatCurrency(state.annualBTCRevenue);
+            dailyNetCostEl.style.color = dailyNetCost < 0 ? 'var(--success-color)' : 'var(--text-primary)';
+
+            document.getElementById('annualBTCRevenue').textContent = formatCurrency(annualBTCRevenue);
             var netCostEl = document.getElementById('annualNetCost');
             netCostEl.textContent = formatCurrency(annualNetCost);
             if (annualNetCost < 0) {
@@ -1679,11 +1715,15 @@
             } else {
                 netCostEl.style.color = 'var(--text-primary)';
             }
-            
+
+            // 存储
             state.annualHours = annualHours;
+            state.operatingDays = operatingDays;
             state.annualElectricity = annualElectricity;
             state.dailyOperatingCost = dailyOperatingCost;
-            state.annualBTCRevenue = state.annualBTCRevenue;
+            state.dailyBTCRevenue = dailyBTCRevenue;
+            state.dailyNetCost = dailyNetCost;
+            state.annualBTCRevenue = annualBTCRevenue;
             state.annualNetCost = annualNetCost;
             state.previousAnnualCost = previousAnnualCost;
             state.annualSavings = annualSavings;
@@ -1693,28 +1733,32 @@
         // ===== 优雅的对比表格 =====
         function calculateComparison() {
             var baseInvest = state.totalInvestment;
-            var annualEnergy = state.annualHours * state.heatingDemand;
+            // 对比基准对齐 ANTRACK 实际总供热功率，确保各方案在同一供热量下比较
+            var annualEnergy = state.annualHours * state.totalOperatingPower;
             var rows = [];
             var lang = document.getElementById('languageSelect').value;
             var region = state.region;
             var hasEquipment = document.getElementById('hasEquipmentSelect').value;
-            
+
             // 计算 ANTRACK 5 年总成本
             var antrackFiveYear = baseInvest + state.annualNetCost * 5;
-            
+
             // 已有设备场景：只对比用户设备 vs ANTRACK
             var compareKeys = (hasEquipment === 'yes') ? [state.equipmentType] : Object.keys(HEATING_METHODS);
-            
+
             compareKeys.forEach(function(key) {
                 var method = HEATING_METHODS[key];
-                var invest = (method.investPerKw[region] || method.investPerKw.europe) * state.heatingDemand;
-                
+                // 设备投资对齐 ANTRACK 实际总供热功率
+                var invest = (method.investPerKw[region] || method.investPerKw.europe) * state.totalOperatingPower;
+
                 // 计算各供热方式的年度成本
                 var annualCost;
                 if (key === 'heatpump') {
-                    annualCost = (annualEnergy / state.copValue) * state.electricityPrice;
+                    // EC4(80°C) 场景：标准热泵无法产出 80°C，必须用高温热泵 COP
+                    var effectiveCop = state.tempType === 'ec4' ? COMPARISON_HP_COP_HIGH_TEMP : state.copValue;
+                    annualCost = (annualEnergy / effectiveCop) * state.electricityPrice;
                 } else if (key === 'gas') {
-                    annualCost = (annualEnergy / method.efficiency / GAS_HEAT_VALUE) * state.gasPrice;
+                    annualCost = (annualEnergy / method.efficiency) * state.gasPrice;
                 } else if (key === 'biomass') {
                     annualCost = (annualEnergy / method.efficiency) * state.biomassPrice;
                 } else if (key === 'electric') {
@@ -1822,9 +1866,9 @@
                 document.getElementById('annualElectricityCost').textContent = formatCurrency(state.annualElectricity);
                 document.getElementById('dailyOperatingCost').textContent = formatCurrency(state.dailyOperatingCost);
                 document.getElementById('dailyBTCRevenue').textContent = formatCurrency(state.dailyBTCRevenue);
-                document.getElementById('dailyNetCost').textContent = formatCurrency(state.dailyOperatingCost - state.dailyBTCRevenue);
+                document.getElementById('dailyNetCost').textContent = formatCurrency(state.dailyNetCost);
                 document.getElementById('annualBTCRevenue').textContent = formatCurrency(state.annualBTCRevenue);
-                var netCost = state.annualElectricity - state.annualBTCRevenue;
+                var netCost = state.annualNetCost;
                 document.getElementById('annualNetCost').textContent = formatCurrency(netCost);
             }
             if (!document.getElementById('step4').classList.contains('hidden')) updateStep4Display();
@@ -1843,8 +1887,8 @@
             // 投资组成明细
             document.getElementById('deviceCost').textContent = formatCurrency(state.deviceCost);
             document.getElementById('minerCost').textContent = formatCurrency(state.minerCost);
-            document.getElementById('shippingCost').textContent = formatCurrency(TRANSPORT * state.sets);
-            document.getElementById('installCost').textContent = formatCurrency(INSTALLATION * state.sets);
+            document.getElementById('shippingCost').textContent = formatCurrency(TRANSPORT * state.antrackUnits);
+            document.getElementById('installCost').textContent = formatCurrency(INSTALLATION * state.antrackUnits);
             document.getElementById('totalInvestmentDetail').textContent = formatCurrency(state.totalInvestment);
             
             if (hasEquipment === 'yes') {
@@ -1905,7 +1949,7 @@
             
             // 现金流
             document.getElementById('resultDailyCost').textContent = formatCurrency(state.dailyOperatingCost);
-            var dailyNetCost = state.dailyOperatingCost - state.dailyBTCRevenue;
+            var dailyNetCost = state.dailyNetCost;
             var dailyNetCostEl = document.getElementById('resultDailyNetCost');
             dailyNetCostEl.textContent = formatCurrency(dailyNetCost);
             if (dailyNetCost < 0) {
@@ -1917,22 +1961,11 @@
             document.getElementById('resultBTCRevenue2').textContent = formatCurrency(state.annualBTCRevenue);
             document.getElementById('resultElectricityCost').textContent = formatCurrency(state.annualElectricity);
             
-            // 累计收益/支出：已有设备显示节省，新装显示净支出
-            var cumulative5Year, cumulative10Year;
-            var label5Key, label10Key;
-            
-            if (hasEquipment === 'yes') {
-                cumulative5Year = state.annualSavings * 5;
-                cumulative10Year = state.annualSavings * 10;
-                label5Key = '5 年累计收益';
-                label10Key = '10 年累计收益';
-            } else {
-                // 新装：显示累计净支出（正值=花钱，负值=盈利）
-                cumulative5Year = state.annualNetCost * 5;
-                cumulative10Year = state.annualNetCost * 10;
-                label5Key = '5 年累计净支出';
-                label10Key = '10 年累计净支出';
-            }
+            // 5年/10年总拥有成本 = 设备投资 + 年度运营净成本 × 年数
+            var cumulative5Year = state.totalInvestment + state.annualNetCost * 5;
+            var cumulative10Year = state.totalInvestment + state.annualNetCost * 10;
+            var label5Key = '5 年总成本';
+            var label10Key = '10 年总成本';
             
             // 更新标签
             var label5El = document.querySelector('#cumulative5Row td');
